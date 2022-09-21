@@ -41,6 +41,7 @@ func (f *FWriter) open() {
 		log.Fatalln("文件打开失败", err)
 	}
 	f.bufWriter = bufio.NewWriter(f.file)
+	f.loadIndex()
 }
 
 func (f *FWriter) Path() string {
