@@ -1,4 +1,4 @@
-# fwrite
+# github.com/xiaojun207/fwrite
 This is fast writer
 
 ## use
