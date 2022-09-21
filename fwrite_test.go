@@ -2,6 +2,7 @@ package fwrite
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"log"
 	"os"
@@ -54,14 +55,43 @@ func TestFWriterBufGo(t *testing.T) {
 
 func TestFWriterBuf(t *testing.T) {
 	start := time.Now()
-
 	fwriter := New(path)
-	for i := 0; i < 100*10000; i++ {
+	log.Println("TestFWriterBuf New 耗时：", time.Since(start))
+
+	start = time.Now()
+	for i := 0; i < 1*10000; i++ {
 		fwriter.WriteToBuf(d)
 	}
 	fwriter.Flush()
 
 	log.Println("TestFWriterBuf 耗时：", time.Since(start))
+	log.Println(len(fwriter.indexList))
+
+	start = time.Now()
+	d, err := fwriter.Read(10000)
+	if err != nil {
+		log.Println("TestFWriterBuf.err:", err)
+	}
+	log.Println("TestFWriterBuf read 耗时：", time.Since(start), string(d))
+}
+
+func TestFileRead(t *testing.T) {
+	start := time.Now()
+
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatalln("文件打开失败", err)
+	}
+
+	log.Println("len:", len(d))
+	var bl = make([]byte, 8)
+	i, err := file.ReadAt(bl, 0)
+	log.Println(i, err)
+
+	length := binary.BigEndian.Uint64(bl)
+	log.Println(length)
+
+	log.Println("TestFileRead 耗时：", time.Since(start))
 }
 
 func TestFileWriter(t *testing.T) {
