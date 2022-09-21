@@ -96,6 +96,7 @@ func (f *FWriter) WriteToBuf(d []byte) (int, error) {
 	if err != nil {
 		return nn, err
 	}
+	f.bufWriter.Flush()
 	f.addIndex(len(d))
 	return nn, err
 }
@@ -112,6 +113,7 @@ func (f *FWriter) BatchWriteToBuf(arr [][]byte) (int, error) {
 		f.addIndex(len(d))
 		count = count + l
 	}
+	f.bufWriter.Flush()
 	return count, nil
 }
 
