@@ -20,8 +20,9 @@ type FWriter struct {
 }
 
 func New(path string) *FWriter {
+	os.MkdirAll(path, os.ModePerm)
 	f := &FWriter{
-		path:       path,
+		path:       path + "/00000001.f",
 		indexList:  []int64{},
 		lengthList: []uint64{},
 	}

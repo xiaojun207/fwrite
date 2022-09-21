@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var path = "tmp/data.dat"
+var path = "tmp/data"
 var d []byte
 
 func init() {
