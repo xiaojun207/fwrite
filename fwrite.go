@@ -127,13 +127,15 @@ func (f *FWriter) addIndex(l int) {
 	f.lengthList = append(f.lengthList, uint64(l))
 }
 
-func (s *FWriter) loadIndex() {
+func (f *FWriter) loadIndex() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 	idx := 0
 	offset := int64(0)
-	s.reader.Seek(0, 0)
+	f.reader.Seek(0, 0)
 	for true {
 		var d = make([]byte, 8)
-		count, err := s.reader.ReadAt(d, offset)
+		count, err := f.reader.ReadAt(d, offset)
 		if err != nil {
 			log.Println("loadIdx err:", err, ", count:", count, ",idx:", idx)
 			break
@@ -144,7 +146,7 @@ func (s *FWriter) loadIndex() {
 		}
 		length := binary.BigEndian.Uint64(d)
 
-		s.addIndex(int(length))
+		f.addIndex(int(length))
 
 		offset = offset + int64(length) + 8
 		idx++
@@ -157,15 +159,25 @@ func (f *FWriter) Read(index int) ([]byte, error) {
 		return nil, errors.New("index is out of range")
 	}
 	if len(f.indexList) != len(f.lengthList) {
-		log.Panicln("FWriter index[", f.path, "] is err, ", len(f.indexList), "!=", len(f.lengthList), ", please restart")
+		log.Panicln("FWriter.Read  index[", f.path, "] is err, ", len(f.indexList), "!=", len(f.lengthList), ", please restart")
 	}
 
 	length := f.lengthList[index]
 	offset := f.indexList[index]
+
+	lastOffset, _ := f.reader.Seek(0, 2)
+
+	left := lastOffset - offset - 8
+	if left < int64(length) {
+		length = uint64(left)
+		log.Println("FWriter.Read, lastOffset:", lastOffset, ",offset:", offset, ",length:", length)
+	}
+
 	var b = make([]byte, length)
+
 	c, err := f.reader.ReadAt(b, offset+8)
 	if uint64(c) != length {
-		log.Println("fwrite.Read, count")
+		log.Println("fwrite.Read, count:", c, ", length:", length)
 	}
 	return b, err
 }

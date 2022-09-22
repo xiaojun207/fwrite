@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -120,4 +122,9 @@ func TestFileWriterBuf(t *testing.T) {
 	}
 	write.Flush()
 	log.Println("TestFileWriterBuf 耗时：", time.Since(start))
+}
+
+func TestFileTest(t *testing.T) {
+	bel := strconv.IsPrint('\007')
+	fmt.Println(bel)
 }
