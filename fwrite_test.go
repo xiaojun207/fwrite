@@ -2,12 +2,14 @@ package fwrite
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -22,27 +24,38 @@ func init() {
 		"log": "2021-12-10 11:43:59,932 ERROR com.alibaba.cloud.nacos.registry.NacosServiceRegistry 75 nacos registry, manager register failed...NacosRegistration{nacosDiscoveryProperties=NacosDiscoveryProperties{serverAddr='192.168.2.43:8848', endpoint='', namespace='', watchDelay=30000",
 	}
 	d, _ = json.Marshal(td)
+	//os.RemoveAll(path)
 }
 
 func TestTestFWriter(t *testing.T) {
-	start := time.Now()
+	log.Println("d.len:", len(d))
 
+	num := 100 * 10000
+	start := time.Now()
 	fwriter := New(path)
-	for i := 0; i < 100*10000; i++ {
-		fwriter.Write(d)
+	log.Println("TestFWriterBuf New 耗时：", time.Since(start))
+	start = time.Now()
+
+	for i := 0; i < num; i++ {
+		fwriter.Write(d[:20+i%200])
 	}
-	log.Println("TestTestFWriter 耗时：", time.Since(start))
+
+	l := time.Since(start)
+	log.Printf("TestTestFWriter 耗时：%s,平均：%f 条/s \n", l, float64(num*1000)/float64(l.Milliseconds()))
 }
 
 func TestFWriterBufGo(t *testing.T) {
+	num := 10 * 10 * 10000
 	start := time.Now()
-
 	fwriter := New(path)
+	log.Println("TestFWriterBuf New 耗时：", time.Since(start))
+	start = time.Now()
+
 	wg := sync.WaitGroup{}
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		f := func() {
-			for j := 0; j < 10000; j++ {
+			for j := 0; j < 10*10000; j++ {
 				fwriter.WriteToBuf(d)
 			}
 			wg.Done()
@@ -52,29 +65,27 @@ func TestFWriterBufGo(t *testing.T) {
 	wg.Wait()
 	fwriter.Flush()
 
-	log.Println("TestFWriterBufGo 耗时：", time.Since(start))
+	l := time.Since(start)
+	log.Printf("TestFWriterBufGo 耗时：%s,平均：%f 条/s \n", l, float64(num*1000)/float64(l.Milliseconds()))
 }
 
 func TestFWriterBuf(t *testing.T) {
+	num := 100 * 10000
 	start := time.Now()
 	fwriter := New(path)
 	log.Println("TestFWriterBuf New 耗时：", time.Since(start))
-
 	start = time.Now()
-	for i := 0; i < 1*10000; i++ {
-		fwriter.WriteToBuf(d)
+	for i := 0; i < num; i++ {
+		fwriter.WriteToBuf(d[:20+i%200])
 	}
 	fwriter.Flush()
+	l := time.Since(start)
 
-	log.Println("TestFWriterBuf 耗时：", time.Since(start))
-	log.Println(len(fwriter.indexList))
+	log.Printf("TestFWriterBuf 耗时：%s,平均：%f 条/s \n", l, float64(num*1000)/float64(l.Milliseconds()))
 
 	start = time.Now()
-	d, err := fwriter.Read(10000)
-	if err != nil {
-		log.Println("TestFWriterBuf.err:", err)
-	}
-	log.Println("TestFWriterBuf read 耗时：", time.Since(start), string(d))
+	fwriter.SaveIdxFile()
+	log.Println("TestFWriterBuf SaveIdxFile 耗时：", time.Since(start))
 }
 
 func TestFileRead(t *testing.T) {
@@ -127,4 +138,60 @@ func TestFileWriterBuf(t *testing.T) {
 func TestFileTest(t *testing.T) {
 	bel := strconv.IsPrint('\007')
 	fmt.Println(bel)
+}
+
+func TestByteTest(t *testing.T) {
+	num := 10000 * 10000
+
+	timeFrom := uint64(1663804830254)
+	timeEnd := uint64(1663891199297)
+	var arr []byte
+
+	start := make([]byte, 8)
+	binary.BigEndian.PutUint64(start, timeFrom)
+	end := make([]byte, 8)
+	binary.BigEndian.PutUint64(end, timeEnd)
+
+	arr = append(arr, start...)
+	arr = append(arr, end...)
+
+	s := time.Now()
+	for i := 0; i < num; i++ {
+		timestamp := d[8:16]
+		if bytes.Compare(timestamp, start) < 0 || bytes.Compare(timestamp, end) >= 0 {
+			continue
+		}
+	}
+	log.Println("[]byte.l", time.Since(s))
+
+	s = time.Now()
+	for i := 0; i < num; i++ {
+		timestamp := binary.BigEndian.Uint64(d[8:16])
+		if timestamp < timeFrom || timestamp >= timeEnd {
+			continue
+		}
+	}
+	log.Println("uint64.l", time.Since(s))
+}
+
+func TestQueryByteTest(t *testing.T) {
+	num := 10000 * 10000
+
+	query := "This is a text"
+	byteQuery := []byte(query)
+	var arr []byte
+	arr = append(arr, []byte("tool test2json -t /private/var/Process finished with the exit code 0"+query+"estQueryByteTest_in_github_")...)
+
+	s := time.Now()
+	for i := 0; i < num; i++ {
+		bytes.Contains(arr, byteQuery)
+	}
+	log.Println("[]byte.l:", time.Since(s))
+
+	s = time.Now()
+	for i := 0; i < num; i++ {
+		text := string(arr)
+		strings.Contains(text, query)
+	}
+	log.Println("string.l:", time.Since(s))
 }
