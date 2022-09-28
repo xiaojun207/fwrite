@@ -14,7 +14,6 @@ type FWriter struct {
 	reader     *os.File
 	file       *os.File
 	offsetList []int64
-	lengthList []uint64
 	bufWriter  *bufio.Writer
 	mutex      sync.RWMutex
 	fHeader    []byte
@@ -25,8 +24,7 @@ func New(path string) *FWriter {
 	f := &FWriter{
 		path:       path + "/00000001.f",
 		idxPath:    path + "/00000001.i",
-		offsetList: []int64{},
-		lengthList: []uint64{},
+		offsetList: []int64{0},
 		fHeader:    []byte{0, 0, 0, 0},
 	}
 	f.open()
@@ -76,6 +74,7 @@ func (f *FWriter) Write(d []byte) (int, error) {
 	if err != nil {
 		return nn, err
 	}
+	f.addIndex(len(d))
 	return nn, err
 }
 
@@ -88,6 +87,7 @@ func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
 		if err != nil {
 			log.Fatalln("BatchWrite.err:", err)
 		}
+		f.addIndex(len(d))
 		count = count + l
 	}
 	return count, nil
@@ -100,6 +100,7 @@ func (f *FWriter) WriteToBuf(d []byte) (int, error) {
 	if err != nil {
 		return nn, err
 	}
+	f.addIndex(len(d))
 	f.bufWriter.Flush()
 	return nn, err
 }
@@ -113,6 +114,7 @@ func (f *FWriter) BatchWriteToBuf(arr [][]byte) (int, error) {
 		if err != nil {
 			log.Fatalln("BatchWrite.err:", err)
 		}
+		f.addIndex(len(d))
 		count = count + l
 	}
 	f.bufWriter.Flush()
@@ -120,7 +122,7 @@ func (f *FWriter) BatchWriteToBuf(arr [][]byte) (int, error) {
 }
 
 func (f *FWriter) Count() int {
-	return len(f.offsetList)
+	return len(f.offsetList) - 1
 }
 
 func (f *FWriter) Flush() {

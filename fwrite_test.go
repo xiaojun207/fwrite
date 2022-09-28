@@ -70,9 +70,10 @@ func TestFWriterBufGo(t *testing.T) {
 }
 
 func TestFWriterBuf(t *testing.T) {
-	num := 100 * 10000
+	num := 10 * 10000
 	start := time.Now()
 	fwriter := New(path)
+	fwriter.LoadIndex()
 	log.Println("TestFWriterBuf New 耗时：", time.Since(start))
 	start = time.Now()
 	for i := 0; i < num; i++ {
@@ -84,9 +85,9 @@ func TestFWriterBuf(t *testing.T) {
 	log.Printf("TestFWriterBuf 耗时：%s,平均：%f 条/s \n", l, float64(num*1000)/float64(l.Milliseconds()))
 
 	start = time.Now()
-	fwriter.LoadIndex()
 	fwriter.SaveIdxFile()
 	log.Println("TestFWriterBuf SaveIdxFile 耗时：", time.Since(start))
+	log.Println("count:", fwriter.Count())
 }
 
 func TestFileRead(t *testing.T) {

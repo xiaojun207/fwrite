@@ -12,15 +12,14 @@ func (f *FWriter) offset() int64 {
 	offset := int64(0)
 	count := len(f.offsetList)
 	if count > 0 {
-		offset = f.offsetList[count-1] + 4 + 8 + int64(f.lengthList[count-1])
+		offset = f.offsetList[count-1]
 	}
 	return offset
 }
 
 func (f *FWriter) addIndex(l int) {
 	offset := f.offset()
-	f.offsetList = append(f.offsetList, offset)
-	f.lengthList = append(f.lengthList, uint64(l))
+	f.offsetList = append(f.offsetList, offset+4+8+int64(l))
 }
 
 func (f *FWriter) loadIdxFile() {
@@ -34,16 +33,12 @@ func (f *FWriter) loadIdxFile() {
 		idx := 0
 
 		f.offsetList = []int64{}
-		f.lengthList = []uint64{}
 		for idx < count {
 			lastOffset := binary.BigEndian.Uint64(arr[idx : idx+8])
-			lastLength := binary.BigEndian.Uint64(arr[idx+8 : idx+8+8])
-
 			f.offsetList = append(f.offsetList, int64(lastOffset))
-			f.lengthList = append(f.lengthList, lastLength)
-			idx = idx + 8 + 8
+			idx = idx + 8
 		}
-		log.Println("loadIdxFile, len:", len(f.offsetList))
+		log.Println("loadIdxFile, len:", len(f.offsetList)-1)
 	}
 }
 
@@ -58,11 +53,9 @@ func (f *FWriter) SaveIdxFile() {
 
 	var arr []byte
 	for i := 0; i < len(f.offsetList); i++ {
-		offset, length := make([]byte, 8), make([]byte, 8)
+		offset := make([]byte, 8)
 		binary.BigEndian.PutUint64(offset, uint64(f.offsetList[i]))
-		binary.BigEndian.PutUint64(length, f.lengthList[i])
 		arr = append(arr, offset...)
-		arr = append(arr, length...)
 	}
 	file.Write(arr)
 }
@@ -74,7 +67,7 @@ func (f *FWriter) LoadIndex() {
 
 	f.loadIdxFile()
 
-	idx := len(f.offsetList)
+	idx := len(f.offsetList) - 1
 	offset := f.offset()
 
 	f.reader.Seek(0, 0)
@@ -103,28 +96,25 @@ func (f *FWriter) LoadIndex() {
 
 // index is start at 0
 func (f *FWriter) Read(index int) ([]byte, error) {
-	if index >= len(f.offsetList) {
+	if index >= len(f.offsetList)-1 {
 		return nil, errors.New("index is out of range")
 	}
-	if len(f.offsetList) != len(f.lengthList) {
-		log.Panicln("FWriter.Read  index[", f.path, "] is err, ", len(f.offsetList), "!=", len(f.lengthList), ", please restart")
-	}
 
-	length := f.lengthList[index]
 	offset := f.offsetList[index]
+	offsetNext := f.offsetList[index+1]
+	length := offsetNext - offset - 8 - 4
 
 	lastOffset, _ := f.reader.Seek(0, 2)
 
 	left := lastOffset - offset - 8 - 4
-	if left < int64(length) {
-		length = uint64(left)
+	if left < length {
+		length = left
 		log.Println("FWriter.Read, lastOffset:", lastOffset, ",offset:", offset, ",length:", length)
 	}
 
 	var b = make([]byte, length)
-
 	c, err := f.reader.ReadAt(b, offset+8+4)
-	if uint64(c) != length {
+	if int64(c) != length {
 		log.Println("fwrite.Read, count:", c, ", length:", length)
 	}
 	return b, err
