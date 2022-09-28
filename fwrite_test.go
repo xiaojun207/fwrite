@@ -84,6 +84,7 @@ func TestFWriterBuf(t *testing.T) {
 	log.Printf("TestFWriterBuf 耗时：%s,平均：%f 条/s \n", l, float64(num*1000)/float64(l.Milliseconds()))
 
 	start = time.Now()
+	fwriter.LoadIndex()
 	fwriter.SaveIdxFile()
 	log.Println("TestFWriterBuf SaveIdxFile 耗时：", time.Since(start))
 }
