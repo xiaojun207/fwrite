@@ -26,7 +26,7 @@ func (f *FWriter) loadIdxFile() {
 	if exists(f.idxPath) {
 		reader, err := os.OpenFile(f.idxPath, os.O_RDONLY, 0)
 		if err != nil {
-			log.Fatalln("文件打开失败", err)
+			log.Fatalln("FWriter.loadIdxFile.文件打开失败", err)
 		}
 		arr, err := io.ReadAll(reader)
 		count := len(arr)
@@ -38,7 +38,7 @@ func (f *FWriter) loadIdxFile() {
 			f.offsetList = append(f.offsetList, int64(lastOffset))
 			idx = idx + 8
 		}
-		log.Println("loadIdxFile, len:", len(f.offsetList)-1)
+		log.Println("FWriter.loadIdxFile, len:", len(f.offsetList)-1)
 	}
 }
 
@@ -48,7 +48,7 @@ func (f *FWriter) SaveIdxFile() {
 	}
 	file, err := os.OpenFile(f.idxPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
-		log.Fatalln("文件创建失败", err)
+		log.Fatalln("FWriter.SaveIdxFile.文件创建失败:", err)
 	}
 
 	var arr []byte
@@ -76,14 +76,14 @@ func (f *FWriter) LoadIndex() {
 		count, err := f.reader.ReadAt(d, 4+offset)
 		if err != nil {
 			if err.Error() == "EOF" {
-				log.Println("loadIdx, idx:", idx)
+				log.Println("FWriter.LoadIdx, idx:", idx)
 			} else {
-				log.Println("loadIdx err:", err, ", count:", count, ",idx:", idx)
+				log.Println("FWriter.LoadIdx err:", err, ", count:", count, ",idx:", idx)
 			}
 			break
 		}
 		if count != 8 {
-			log.Println("loadIdx count:", count)
+			log.Println("FWriter.LoadIdx count:", count)
 			break
 		}
 		length := binary.BigEndian.Uint64(d)
@@ -97,7 +97,7 @@ func (f *FWriter) LoadIndex() {
 // index is start at 0
 func (f *FWriter) Read(index int) ([]byte, error) {
 	if index >= len(f.offsetList)-1 {
-		return nil, errors.New("index is out of range")
+		return nil, errors.New("FWriter read, index is out of range")
 	}
 
 	offset := f.offsetList[index]
@@ -115,7 +115,7 @@ func (f *FWriter) Read(index int) ([]byte, error) {
 	var b = make([]byte, length)
 	c, err := f.reader.ReadAt(b, offset+8+4)
 	if int64(c) != length {
-		log.Println("fwrite.Read, count:", c, ", length:", length)
+		log.Println("FWriter.Read, count:", c, ", length:", length)
 	}
 	return b, err
 }

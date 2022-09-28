@@ -34,12 +34,12 @@ func New(path string) *FWriter {
 func (f *FWriter) open() {
 	file, err := os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
-		log.Fatalln("文件创建失败", err)
+		log.Fatalln("FWriter.open, 文件创建失败", err)
 	}
 	f.file = file
 	f.reader, err = os.OpenFile(f.path, os.O_RDONLY, 0)
 	if err != nil {
-		log.Fatalln("文件打开失败", err)
+		log.Fatalln("FWriter.open, 文件打开失败", err)
 	}
 	f.bufWriter = bufio.NewWriterSize(f.file, 1024*1024*5)
 }
@@ -85,7 +85,7 @@ func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
 	for _, d := range arr {
 		l, err := f.file.Write(f.preData(d))
 		if err != nil {
-			log.Fatalln("BatchWrite.err:", err)
+			log.Fatalln("FWriter.BatchWrite.err:", err)
 		}
 		f.addIndex(len(d))
 		count = count + l
@@ -112,7 +112,7 @@ func (f *FWriter) BatchWriteToBuf(arr [][]byte) (int, error) {
 	for _, d := range arr {
 		l, err := f.bufWriter.Write(f.preData(d))
 		if err != nil {
-			log.Fatalln("BatchWrite.err:", err)
+			log.Fatalln("FWriter.BatchWrite.err:", err)
 		}
 		f.addIndex(len(d))
 		count = count + l
