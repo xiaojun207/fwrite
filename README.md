@@ -3,9 +3,18 @@ This is fast writer
 
 ## use
 ```
-    fwriter := New(path)
+    fwriter := fwrite.New(path)
 	for i := 0; i < 100*10000; i++ {
-		fwriter.WriteToBuf(d)
+		fwriter.Write(d)
 	}
 	fwriter.Flush()
+	
+	for i := 0; i < 100*10000; i++ {
+		d,err := fwriter.Read(i)
+		log.Println("err:", err, "d:", d)
+	}
+	
+	// 
+	fwriter.SaveIdxFile()
+	
 ```
