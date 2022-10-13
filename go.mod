@@ -2,10 +2,9 @@ module github.com/xiaojun207/fwrite
 
 go 1.19
 
-require (
-	github.com/edsrzf/mmap-go v1.1.0
-	github.com/pierrec/lz4/v4 v4.1.17
-	golang.org/x/exp v0.0.0-20221006183845-316c7553db56
-)
+replace github.com/pierrec/lz4/v4 v4.1.17 => github.com/xiaojun207/lz4/v4 v4.1.18
 
-require golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
+require (
+	github.com/pierrec/lz4/v4 v4.1.17
+	github.com/xiaojun207/go-base-utils v0.2.3
+)

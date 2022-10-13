@@ -33,6 +33,7 @@ type FWriter struct {
 	mutex      sync.RWMutex
 	readLock   sync.RWMutex
 	readOffset int64
+	idxHasLoad bool
 	idxOffset  int64
 	fHeader    []byte
 }

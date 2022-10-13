@@ -42,6 +42,8 @@ func (f *FWriter) readAt(b []byte, offset int64) (int, error) {
 
 // index is start at 0
 func (f *FWriter) Read(index uint) ([]byte, error) {
+	f.LoadIndex()
+
 	if index >= uint(len(f.offsetList)-1) {
 		return nil, errors.New("FWriter read, index is out of range")
 	}

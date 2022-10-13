@@ -7,6 +7,10 @@ import (
 	"os"
 )
 
+const (
+	IdxSize = 8
+)
+
 func (f *FWriter) offset() int64 {
 	offset := int64(0)
 	count := len(f.offsetList)
@@ -21,6 +25,10 @@ func (f *FWriter) addOffset(l int) {
 	f.offsetList = append(f.offsetList, offset+int64(l))
 }
 
+func (f *FWriter) getOffset(index int) int64 {
+	return f.offsetList[index]
+}
+
 func (f *FWriter) loadIdxFile() {
 	if exists(f.idxPath) {
 		file, err := os.Open(f.idxPath)
@@ -30,7 +38,7 @@ func (f *FWriter) loadIdxFile() {
 		reader := lz4.NewReader(file)
 		f.offsetList = []int64{}
 		for true {
-			var p = make([]byte, 8)
+			var p = make([]byte, IdxSize)
 			_, err = reader.Read(p)
 			if err != nil {
 				if err.Error() != "EOF" {
@@ -67,7 +75,7 @@ func (f *FWriter) SaveIdxFile() {
 		idxOffset = int64(i)
 	}
 	if len(arr) > 0 {
-		log.Println("FWriter.SaveIdxFile, AddNum:", len(arr)/8)
+		log.Println("FWriter.SaveIdxFile, AddNum:", len(arr)/IdxSize)
 		w.Write(arr)
 		w.Flush()
 		f.idxOffset = idxOffset
@@ -95,9 +103,13 @@ func (f *FWriter) loadIdxFromData() int {
 }
 
 func (f *FWriter) LoadIndex() {
+	if f.idxHasLoad {
+		return
+	}
 	log.Println("FWriter[" + f.path + "].LoadIndex ...")
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
+	f.idxHasLoad = true
 
 	f.loadIdxFile()
 	num := f.loadIdxFromData()
