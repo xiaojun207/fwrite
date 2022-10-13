@@ -144,5 +144,7 @@ func (f *FWriter) Count() int {
 }
 
 func (f *FWriter) Flush() {
-	f.GetWriter().Flush()
+	if f.writer != nil {
+		f.GetWriter().Flush()
+	}
 }
