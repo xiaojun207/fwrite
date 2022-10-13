@@ -71,7 +71,6 @@ func (f *FWriter) GetWriter() IOWriter {
 		if err != nil {
 			log.Println("GetWriter.Apply.err:", err)
 		}
-		//f.writer = bufio.NewWriterSize(f.file, 1024*1024*5)
 	}
 	return f.writer
 }
@@ -81,11 +80,7 @@ func (f *FWriter) GetReader() (reader IOReader) {
 	if err != nil {
 		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
 	}
-	//reader = file
 	reader = lz4.NewReader(file)
-	//reader = bufio.NewReaderSize(lz4.NewReader(file), 1024*1024*5)
-	//at, err := mmap.Map(file, mmap.RDONLY, 0)
-	//return bufio.NewReaderSize(bytes.NewReader(at), 1024*1024*5)
 	return
 }
 
@@ -149,5 +144,5 @@ func (f *FWriter) Count() int {
 }
 
 func (f *FWriter) Flush() {
-	f.writer.Flush()
+	f.GetWriter().Flush()
 }
