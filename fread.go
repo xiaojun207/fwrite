@@ -61,6 +61,33 @@ func (f *FWriter) Read(index uint) ([]byte, error) {
 	return b, err
 }
 
+func (f *FWriter) Search(query func(d []byte) bool) (res [][]byte, err error) {
+	f.LoadIndex()
+
+	count := f.Count()
+	index := 0
+	for index < count {
+		offset := f.offsetList[index]
+		offsetNext := f.offsetList[index+1]
+		length := offsetNext - offset - LengthSide - HeadSize
+
+		var b = make([]byte, length)
+		_, err = f.readAt(b, offset+LengthSide+HeadSize)
+		if err != nil {
+			if err.Error() != "EOF" {
+				return res, err
+			}
+			break
+		}
+		if query(b) {
+			res = append(res, b)
+		}
+		index++
+	}
+
+	return res, nil
+}
+
 func (f *FWriter) FileSize() int64 {
 	return Size(f.path)
 }

@@ -113,6 +113,9 @@ func (f *FWriter) LoadIndex() {
 
 	f.loadIdxFile()
 	num := f.loadIdxFromData()
+
+	f.count = len(f.offsetList) - 1
+
 	log.Println("FWriter["+f.path+"].LoadIndex: ", f.Count())
 	if num > 0 {
 		log.Println("FWriter["+f.path+"].LoadIndex: num:", num)

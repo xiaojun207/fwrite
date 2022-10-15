@@ -36,6 +36,7 @@ type FWriter struct {
 	idxHasLoad bool
 	idxOffset  int64
 	fHeader    []byte
+	count      int
 }
 
 func New(path string) *FWriter {
@@ -140,11 +141,14 @@ func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
 }
 
 func (f *FWriter) Count() int {
-	return len(f.offsetList) - 1
+	f.LoadIndex()
+	return f.count
+	//return len(f.offsetList) - 1
 }
 
 func (f *FWriter) Flush() {
 	if f.writer != nil {
 		f.GetWriter().Flush()
+		f.count = len(f.offsetList) - 1
 	}
 }
