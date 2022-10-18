@@ -88,6 +88,35 @@ func (f *FWriter) Search(query func(d []byte) bool) (res [][]byte, err error) {
 	return res, nil
 }
 
+// Foreach reset reader read all
+func (f *FWriter) Foreach(filter func(d []byte) bool) (err error) {
+	index := 0
+	reader := f.GetReader()
+	for true {
+		io.CopyN(io.Discard, reader, HeadSize)
+
+		var ln = make([]byte, LengthSide)
+		_, err = reader.Read(ln)
+		length := f.toLenInt(ln)
+
+		var b = make([]byte, length)
+		_, err = reader.Read(b)
+
+		if err != nil {
+			if err.Error() != "EOF" {
+				return err
+			}
+			break
+		}
+		if !filter(b) {
+			return
+		}
+		index++
+	}
+
+	return nil
+}
+
 func (f *FWriter) ForEach(filter func(d []byte) bool) (err error) {
 	index := 0
 	offset := int64(0)

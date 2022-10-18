@@ -105,9 +105,9 @@ func (f *FWriter) toLenInt(ln []byte) LenInt {
 
 func (f *FWriter) preData(d []byte) []byte {
 	//d = Lz4(d)
-	arrLen := f.toLenArr(len(d))
 	var res []byte
 	res = append(res, f.fHeader...)
+	arrLen := f.toLenArr(len(d))
 	res = append(res, arrLen...)
 	res = append(res, d...)
 
