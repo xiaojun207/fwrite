@@ -141,13 +141,11 @@ func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
 }
 
 func (f *FWriter) Count() int {
-	f.LoadIndex()
 	return f.count
-	//return len(f.offsetList) - 1
 }
 
 func (f *FWriter) Flush() {
-	if f.writer != nil {
+	if f.writer != nil && f.count != len(f.offsetList)-1 {
 		f.GetWriter().Flush()
 		f.count = len(f.offsetList) - 1
 	}

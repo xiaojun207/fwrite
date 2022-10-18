@@ -88,6 +88,35 @@ func (f *FWriter) Search(query func(d []byte) bool) (res [][]byte, err error) {
 	return res, nil
 }
 
+func (f *FWriter) ForEach(filter func(d []byte) bool) (err error) {
+	index := 0
+	offset := int64(0)
+	for true {
+		var ln = make([]byte, LengthSide)
+		offset += HeadSize
+		_, err = f.readAt(ln, offset)
+		length := f.toLenInt(ln)
+
+		var b = make([]byte, length)
+		offset += LengthSide
+		_, err = f.readAt(b, offset)
+
+		if err != nil {
+			if err.Error() != "EOF" {
+				return err
+			}
+			break
+		}
+		if !filter(b) {
+			return
+		}
+		index++
+		offset += int64(length)
+	}
+
+	return nil
+}
+
 func (f *FWriter) FileSize() int64 {
 	return Size(f.path)
 }
