@@ -9,6 +9,8 @@ type FMeta struct {
 	metaPath string
 	bufNum   uint64
 	bufSize  uint64
+	bufFirst []byte
+	bufLast  []byte
 
 	num    uint64 `json:"num"`
 	first  []byte `json:"first"`
@@ -28,10 +30,10 @@ func preMetaData(d []byte) []byte {
 }
 
 func (f *FMeta) fillToMeta(d []byte) {
-	if f.first == nil {
-		f.first = preMetaData(d)
+	if f.first == nil && f.bufFirst == nil {
+		f.bufFirst = preMetaData(d)
 	}
-	f.last = preMetaData(d)
+	f.bufLast = preMetaData(d)
 }
 
 func (f *FMeta) setFirst(d []byte) {
@@ -63,6 +65,20 @@ func (f *FMeta) Unmarshal(b []byte) {
 }
 
 func (f *FMeta) flushMeta() {
+	f.num += f.bufNum
+	f.bufNum = 0
+
+	if f.bufSize > 0 {
+		f.offset += f.bufSize
+		f.bufSize = 0
+	}
+
+	if f.first == nil {
+		f.first = f.bufFirst
+	}
+	f.last = f.bufLast
+	f.bufLast = nil
+
 	d := f.Marshal()
 	os.WriteFile(f.metaPath, d, 0666)
 }

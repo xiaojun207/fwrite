@@ -154,16 +154,7 @@ func (f *FWriter) Flush() {
 
 	if f.writer != nil && f.FMeta.bufNum > 0 {
 		f.GetWriter().Flush()
-
-		f.FMeta.num += f.FMeta.bufNum
-		f.FMeta.bufNum = 0
-
-		if f.FMeta.bufSize > 0 {
-			f.FMeta.offset += f.FMeta.bufSize
-			f.FMeta.bufSize = 0
-		}
-
-		f.flushMeta()
+		f.FMeta.flushMeta()
 		log.Println("FWriter.Flush,:", f.FMeta)
 	}
 }
