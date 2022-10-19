@@ -2,11 +2,30 @@ package fwrite
 
 import (
 	"errors"
+	"github.com/pierrec/lz4/v4"
 	"io"
 	"log"
+	"os"
+	"sync"
 )
 
-func (f *FWriter) readAt(b []byte, offset int64) (int, error) {
+type FReader struct {
+	path       string
+	reader     IOReader
+	readLock   sync.RWMutex
+	readOffset int64
+}
+
+func (f *FReader) GetReader() (reader IOReader) {
+	file, err := os.OpenFile(f.path, os.O_RDONLY, 0)
+	if err != nil {
+		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
+	}
+	reader = lz4.NewReader(file)
+	return
+}
+
+func (f *FReader) readAt(b []byte, offset int64) (int, error) {
 	f.readLock.Lock()
 	defer f.readLock.Unlock()
 	reset := func() {
@@ -40,6 +59,13 @@ func (f *FWriter) readAt(b []byte, offset int64) (int, error) {
 	return nn, err
 }
 
+func (f *FWriter) read(index int) ([]byte, error) {
+	offset, length := f.getLength(index)
+	var b = make([]byte, length)
+	_, err := f.readAt(b, offset+LengthSide+HeadSize)
+	return b, err
+}
+
 // index is start at 0
 func (f *FWriter) Read(index uint) ([]byte, error) {
 	f.LoadIndex()
@@ -47,18 +73,7 @@ func (f *FWriter) Read(index uint) ([]byte, error) {
 	if index >= uint(len(f.offsetList)-1) {
 		return nil, errors.New("FWriter read, index is out of range")
 	}
-	offset := f.offsetList[index]
-	offsetNext := f.offsetList[index+1]
-	length := offsetNext - offset - LengthSide - HeadSize
-
-	//log.Println("Read,length:", length, ",offset:", offset+LengthSide+HeadSize)
-	var b = make([]byte, length)
-	c, err := f.readAt(b, offset+LengthSide+HeadSize)
-	if int64(c) != length {
-		log.Println("FWriter.Read, count:", c, ", length:", length, ", offset:", offset)
-	}
-	//return UnLz4(b), err
-	return b, err
+	return f.read(int(index))
 }
 
 func (f *FWriter) Search(query func(d []byte) bool) (res [][]byte, err error) {
@@ -66,13 +81,8 @@ func (f *FWriter) Search(query func(d []byte) bool) (res [][]byte, err error) {
 
 	count := f.Count()
 	index := 0
-	for index < count {
-		offset := f.offsetList[index]
-		offsetNext := f.offsetList[index+1]
-		length := offsetNext - offset - LengthSide - HeadSize
-
-		var b = make([]byte, length)
-		_, err = f.readAt(b, offset+LengthSide+HeadSize)
+	for uint64(index) < count {
+		b, err := f.read(index)
 		if err != nil {
 			if err.Error() != "EOF" {
 				return res, err
@@ -93,8 +103,13 @@ func (f *FWriter) Foreach(filter func(d []byte) bool) (err error) {
 	index := 0
 	reader := f.GetReader()
 	for true {
-		io.CopyN(io.Discard, reader, HeadSize)
-
+		_, err = io.CopyN(io.Discard, reader, HeadSize)
+		if err != nil {
+			if err.Error() != "EOF" {
+				return err
+			}
+			break
+		}
 		var ln = make([]byte, LengthSide)
 		_, err = reader.Read(ln)
 		length := f.toLenInt(ln)

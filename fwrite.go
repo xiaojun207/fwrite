@@ -21,42 +21,42 @@ type LenInt uint16
 const (
 	LengthSide = 2
 	HeadSize   = 1
+	IdxSize    = 8
+	FMetaSize  = 16
 )
 
 type FWriter struct {
-	path       string
-	idxPath    string
-	file       *os.File
-	offsetList []int64
-	writer     IOWriter
-	reader     IOReader
-	mutex      sync.RWMutex
-	readLock   sync.RWMutex
-	readOffset int64
-	idxHasLoad bool
-	idxOffset  int64
-	fHeader    []byte
-	count      int
+	FReader
+	FMeta
+	FIdx
+	path    string
+	writer  IOWriter
+	mutex   sync.RWMutex
+	fHeader []byte
 }
 
 func New(path string) *FWriter {
 	os.MkdirAll(path, os.ModePerm)
 	f := &FWriter{
-		path:       path + "/00000001.f",
-		idxPath:    path + "/00000001.i",
-		offsetList: []int64{0},
-		fHeader:    []byte{0},
+		path: path + "/00000001.f",
+		FReader: FReader{
+			path: path + "/00000001.f",
+		},
+		FIdx: FIdx{
+			idxPath:    path + "/00000001.i",
+			offsetList: []int64{0},
+		},
+		FMeta: FMeta{
+			metaPath: path + "/meta.m",
+		},
+		fHeader: []byte{0},
 	}
 	f.open()
 	return f
 }
 
 func (f *FWriter) open() {
-	file, err := os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatalln("FWriter.open, 文件创建失败", err)
-	}
-	f.file = file
+	f.CreateIdxMeta()
 }
 
 func (f *FWriter) Path() string {
@@ -65,24 +65,21 @@ func (f *FWriter) Path() string {
 
 func (f *FWriter) GetWriter() IOWriter {
 	if f.writer == nil {
-		w := lz4.NewWriter(f.file)
-		f.writer = w
+		file, err := os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalln("FWriter.open, 文件创建失败", err)
+		}
 		fileInfo, _ := os.Stat(f.path)
-		err := w.Apply(lz4.ChecksumOption(false), lz4.AppendOption(fileInfo.Size() > 4))
+
+		w := lz4.NewWriter(file)
+		f.writer = w
+		err = w.Apply(lz4.ChecksumOption(false), lz4.AppendOption(fileInfo.Size() > 4))
+
 		if err != nil {
 			log.Println("GetWriter.Apply.err:", err)
 		}
 	}
 	return f.writer
-}
-
-func (f *FWriter) GetReader() (reader IOReader) {
-	file, err := os.OpenFile(f.path, os.O_RDONLY, 0)
-	if err != nil {
-		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
-	}
-	reader = lz4.NewReader(file)
-	return
 }
 
 func (f *FWriter) toLenArr(ln int) []byte {
@@ -110,19 +107,27 @@ func (f *FWriter) preData(d []byte) []byte {
 	arrLen := f.toLenArr(len(d))
 	res = append(res, arrLen...)
 	res = append(res, d...)
-
 	return res
+}
+
+func (f *FWriter) write(d []byte) (int, error) {
+	nn, err := f.GetWriter().Write(f.preData(d))
+	if err != nil {
+		return nn, err
+	}
+
+	f.fillToMeta(d)
+	f.bufNum++
+	f.bufSize += uint64(nn)
+
+	f.addOffset(nn)
+	return nn, err
 }
 
 func (f *FWriter) Write(d []byte) (int, error) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
-	nn, err := f.GetWriter().Write(f.preData(d))
-	if err != nil {
-		return nn, err
-	}
-	f.addOffset(nn)
-	return nn, err
+	return f.write(d)
 }
 
 func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
@@ -130,23 +135,35 @@ func (f *FWriter) BatchWrite(arr [][]byte) (int, error) {
 	defer f.mutex.Unlock()
 	count := 0
 	for _, d := range arr {
-		l, err := f.GetWriter().Write(f.preData(d))
+		l, err := f.write(d)
 		if err != nil {
 			log.Fatalln("FWriter.BatchWrite.err:", err)
 		}
-		f.addOffset(l)
 		count = count + l
 	}
 	return count, nil
 }
 
-func (f *FWriter) Count() int {
-	return f.count
+func (f *FWriter) Count() uint64 {
+	return f.FMeta.num
 }
 
 func (f *FWriter) Flush() {
-	if f.writer != nil && f.count != len(f.offsetList)-1 {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	if f.writer != nil && f.FMeta.bufNum > 0 {
 		f.GetWriter().Flush()
-		f.count = len(f.offsetList) - 1
+
+		f.FMeta.num += f.FMeta.bufNum
+		f.FMeta.bufNum = 0
+
+		if f.FMeta.bufSize > 0 {
+			f.FMeta.offset += f.FMeta.bufSize
+			f.FMeta.bufSize = 0
+		}
+
+		f.flushMeta()
+		log.Println("FWriter.Flush,:", f.FMeta)
 	}
 }
