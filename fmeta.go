@@ -6,11 +6,12 @@ import (
 )
 
 type FMeta struct {
-	metaPath string
-	bufNum   uint64
-	bufSize  uint64
-	bufFirst []byte
-	bufLast  []byte
+	metaPath   string
+	bufNum     uint64
+	bufSize    uint64
+	lastLength uint64
+	bufFirst   []byte
+	bufLast    []byte
 
 	num    uint64 `json:"num"`
 	first  []byte `json:"first"`
@@ -31,7 +32,8 @@ func preMetaData(d []byte) []byte {
 
 func (f *FMeta) fillToMeta(d []byte) {
 	f.bufNum++
-	f.bufSize += uint64(HeadSize + LengthSide + len(d))
+	f.lastLength = uint64(HeadSize + LengthSide + len(d))
+	f.bufSize += f.lastLength
 
 	if f.first == nil && f.bufFirst == nil {
 		f.bufFirst = preMetaData(d)
@@ -72,8 +74,9 @@ func (f *FMeta) flushMeta() {
 	f.bufNum = 0
 
 	if f.bufSize > 0 {
-		f.offset += f.bufSize
+		f.offset += f.bufSize - f.lastLength
 		f.bufSize = 0
+		f.lastLength = 0
 	}
 
 	if f.first == nil {
