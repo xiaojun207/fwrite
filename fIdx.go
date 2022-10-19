@@ -154,11 +154,13 @@ func (f *FWriter) CreateIdxMeta() {
 		offset = offset + int64(length) + LengthSide + HeadSize
 		idx++
 	}
-	first, _ := f.read(0)
-	last, _ := f.read(int(idx - 1))
+	if idx > 0 {
+		first, _ := f.read(0)
+		last, _ := f.read(int(idx - 1))
 
-	f.setFirst(first)
-	f.setLast(last)
+		f.setFirst(first)
+		f.setLast(last)
+	}
 
 	f.FMeta.num = idx
 	f.FMeta.offset = uint64(lastOffset)
