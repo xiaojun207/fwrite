@@ -17,6 +17,9 @@ type FReader struct {
 }
 
 func (f *FReader) GetReader() (reader IOReader) {
+	if !exists(f.path) {
+		os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	}
 	file, err := os.OpenFile(f.path, os.O_RDONLY, 0)
 	if err != nil {
 		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
