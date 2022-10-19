@@ -30,6 +30,9 @@ func preMetaData(d []byte) []byte {
 }
 
 func (f *FMeta) fillToMeta(d []byte) {
+	f.bufNum++
+	f.bufSize += uint64(HeadSize + LengthSide + len(d))
+
 	if f.first == nil && f.bufFirst == nil {
 		f.bufFirst = preMetaData(d)
 	}

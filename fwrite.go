@@ -116,9 +116,7 @@ func (f *FWriter) write(d []byte) (int, error) {
 		return nn, err
 	}
 
-	f.fillToMeta(d)
-	f.bufNum++
-	f.bufSize += uint64(nn)
+	f.FMeta.fillToMeta(d)
 
 	f.addOffset(nn)
 	return nn, err
