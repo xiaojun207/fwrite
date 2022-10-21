@@ -2,7 +2,9 @@ package fwrite
 
 import (
 	"encoding/binary"
+	"log"
 	"os"
+	"sync"
 )
 
 type FMeta struct {
@@ -12,6 +14,7 @@ type FMeta struct {
 	lastLength uint64
 	bufFirst   []byte
 	bufLast    []byte
+	metaMutex  sync.RWMutex
 
 	num    uint64 `json:"num"`
 	first  []byte `json:"first"`
@@ -70,6 +73,9 @@ func (f *FMeta) Unmarshal(b []byte) {
 }
 
 func (f *FMeta) flushMeta() {
+	f.metaMutex.Lock()
+	defer f.metaMutex.Unlock()
+
 	f.num += f.bufNum
 	f.bufNum = 0
 
@@ -104,4 +110,38 @@ func (f *FMeta) LastData() []byte {
 // FirstData first write data, only show first 16 byte
 func (f *FMeta) FirstData() []byte {
 	return f.first
+}
+
+func (f *FWriter) recreateMeta() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	lastOffset := int64(0)
+
+	firstLength := LenInt(0)
+	lastLength := LenInt(0)
+	num := f.foreach(0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
+		if idx == 0 {
+			firstLength = length
+		}
+		lastLength = length
+		lastOffset = offset
+		return true
+	})
+
+	if num > 0 {
+		var first = make([]byte, firstLength)
+		f.readAt(first, HeadSize+LengthSide)
+		f.FMeta.setFirst(first)
+
+		var last = make([]byte, lastLength)
+		f.readAt(last, lastOffset+HeadSize+LengthSide)
+		f.FMeta.setLast(last)
+	}
+
+	f.FMeta.num = num
+	f.FMeta.offset = uint64(lastOffset)
+	f.flushMeta()
+
+	log.Println("recreateMeta.end,meta:", f.FMeta)
 }

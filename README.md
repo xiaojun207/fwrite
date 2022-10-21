@@ -18,3 +18,9 @@ This is fast writer
 	fwriter.SaveIdxFile()
 	
 ```
+
+## file
+
+    * 00000001.f is the data, can not remove
+    * 00000001.i is the idx file, if remove it, when read by idx will recreate.
+    * meta.m is the meta info, if remove it, restart FWriter will recreate.

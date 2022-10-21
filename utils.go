@@ -28,12 +28,23 @@ func Println(s ...any) {
 	fmt.Println(time.Now().Format(Layout), s)
 }
 
-func Task(name string, f func() int64) {
-	t := time.Now()
+func PrintlnError(err error, a ...any) {
+	if err.Error() != "EOF" {
+		log.Println(err, fmt.Sprint(a...))
+	}
+}
+
+func Task(name string, f func() uint64) {
+	time.Sleep(time.Millisecond * 300)
+	Printf("..........................................[%s].................................................................\n", name)
 	Printf("%v task[%s]start...\n", time.Now().Format(Layout), name)
+	time.Sleep(time.Millisecond * 300)
+	t := time.Now()
 	n := f()
 	tl := time.Since(t)
-	Printf("%v task[%s]end，耗时：%v，平均:%.f条/s \n", time.Now().Format(Layout), name, time.Since(t), float64(n*1000)/float64(tl.Milliseconds()))
+	time.Sleep(time.Millisecond * 300)
+	Printf("%v task[%s]end，耗时：%v，平均:%.f条/s，总计:%d \n", time.Now().Format(Layout), name, tl, float64(n*1000*1000)/float64(tl.Microseconds()), n)
+	time.Sleep(time.Millisecond * 300)
 }
 
 // exists returns whether the given file or directory exists or not

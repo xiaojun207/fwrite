@@ -29,13 +29,12 @@ func getTestData(i int) []byte {
 func TestTestFWriter(t *testing.T) {
 
 	var fwriter *FWriter
-	Task(t.Name()+"-Open", func() int64 {
+	Task(t.Name()+"-Open", func() uint64 {
 		fwriter = New(path)
-		fwriter.LoadIndex()
-		return int64(fwriter.Count())
+		return fwriter.Count()
 	})
 
-	Task(t.Name()+"-Write", func() int64 {
+	Task(t.Name()+"-Write", func() uint64 {
 		for i := 0; i < num; i++ {
 			b := getTestData(i)
 			nn, err := fwriter.Write(b)
@@ -47,14 +46,14 @@ func TestTestFWriter(t *testing.T) {
 			}
 		}
 		fwriter.Flush()
-		return int64(num)
+		return uint64(num)
 	})
 
-	Task(t.Name()+"-Read", func() int64 {
+	Task(t.Name()+"-Read", func() uint64 {
 		c := 0
 		num := fwriter.Count()
 		for i := num - 100; i < num; i++ {
-			b, err := fwriter.Read(uint(i))
+			b, err := fwriter.Read(i)
 			if err != nil {
 				log.Println(i, "Read.err:", err, len(b))
 			} else {
@@ -64,13 +63,7 @@ func TestTestFWriter(t *testing.T) {
 			}
 		}
 		log.Println("read.count:", c)
-		return int64(num)
-	})
-
-	Task(t.Name()+"-SaveIdxFile", func() int64 {
-		// 500*10000*8/1024/1024
-		fwriter.SaveIdxFile()
-		return int64(num)
+		return num
 	})
 
 	log.Println("count:", fwriter.Count())
