@@ -49,7 +49,6 @@ func (f *FMeta) setFirst(d []byte) {
 
 func (f *FMeta) setLast(d []byte) {
 	f.last = preMetaData(d)
-	log.Println("FMeta.last:", f.last)
 }
 
 func (f *FMeta) Marshal() []byte {
