@@ -36,7 +36,7 @@ func (f *FReader) readAt(b []byte, offset int64) (int, error) {
 
 func (f *FReader) Test() {
 	offset := int64(0)
-	var d = make([]byte, 6)
+	var d = make([]byte, 1006)
 	n, err := f.readAt(d, offset)
 	log.Println("err:", err, ",n:", n, ",d:", d)
 }
@@ -108,13 +108,6 @@ func (f *FReader) Foreach(filter func(idx uint64, offset int64, length LenInt, d
 	length := LenInt(0)
 	offset := int64(0)
 	reader := f.GetReader()
-	_, err = io.CopyN(io.Discard, reader, offset)
-	if err != nil {
-		if err.Error() != "EOF" {
-			return idx, err
-		}
-		return idx, err
-	}
 	for true {
 		_, err = io.CopyN(io.Discard, reader, HeadSize)
 		if err != nil {

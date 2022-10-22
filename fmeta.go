@@ -23,14 +23,13 @@ type FMeta struct {
 }
 
 func preMetaData(d []byte) []byte {
-	var b []byte
 	if len(d) >= FMetaSize {
-		b = d[0:FMetaSize]
+		return d[0:FMetaSize]
 	} else {
-		b = make([]byte, FMetaSize)
-		copy(b[FMetaSize-len(d):], d)
+		var b = make([]byte, FMetaSize)
+		copy(b[0:len(d)], d)
+		return b
 	}
-	return b
 }
 
 func (f *FMeta) fillToMeta(d []byte) {
@@ -50,6 +49,7 @@ func (f *FMeta) setFirst(d []byte) {
 
 func (f *FMeta) setLast(d []byte) {
 	f.last = preMetaData(d)
+	log.Println("FMeta.last:", f.last)
 }
 
 func (f *FMeta) Marshal() []byte {
@@ -76,20 +76,22 @@ func (f *FMeta) flushMeta() {
 	f.metaMutex.Lock()
 	defer f.metaMutex.Unlock()
 
-	f.num += f.bufNum
-	f.bufNum = 0
+	if f.bufNum > 0 {
+		f.num += f.bufNum
+		f.bufNum = 0
 
-	if f.bufSize > 0 {
-		f.offset += f.bufSize - f.lastLength
-		f.bufSize = 0
-		f.lastLength = 0
-	}
+		if f.bufSize > 0 {
+			f.offset += f.bufSize - f.lastLength
+			f.bufSize = 0
+			f.lastLength = 0
+		}
 
-	if f.first == nil {
-		f.first = f.bufFirst
+		if f.first == nil {
+			f.first = f.bufFirst
+		}
+		f.last = f.bufLast
+		f.bufLast = nil
 	}
-	f.last = f.bufLast
-	f.bufLast = nil
 
 	d := f.Marshal()
 	os.WriteFile(f.metaPath, d, 0666)

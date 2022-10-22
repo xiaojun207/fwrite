@@ -3,6 +3,7 @@ package fwrite
 import (
 	"encoding/json"
 	"log"
+	"os"
 	"testing"
 )
 
@@ -68,4 +69,12 @@ func TestTestFWriter(t *testing.T) {
 
 	log.Println("count:", fwriter.Count())
 	log.Printf("TestFWriterWrite Size: %v \n", fwriter.FileSize())
+}
+
+func TestNew(t *testing.T) {
+	path := "/Users/kdaxrobot/go/src/maize/tmp/maize/index/fluent.info-20221018"
+	os.RemoveAll(path + "/meta.m")
+	f := New(path)
+	log.Println("count:", f.Count(), f.FirstData(), f.LastData())
+
 }
