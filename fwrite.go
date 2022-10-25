@@ -44,7 +44,7 @@ var (
 )
 
 const (
-	LengthSide = 2
+	LengthSide = 4
 	HeadSize   = 1
 	IdxSize    = 8
 	FMetaSize  = 16

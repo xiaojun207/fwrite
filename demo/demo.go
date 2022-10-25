@@ -7,12 +7,13 @@ import (
 	"github.com/xiaojun207/go-base-utils/math"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 )
 
 var path = "tmp/data"
 var d []byte
-var num = 2
+var num = 10000
 
 func init() {
 	td := map[string]string{
@@ -21,7 +22,7 @@ func init() {
 		"log": "2021-12-10 11:43:59,932 ERROR com.alibaba.cloud.nacos.registry.NacosServiceRegistry 75 nacos registry, manager register failed...NacosRegistration{nacosDiscoveryProperties=NacosDiscoveryProperties{serverAddr='192.168.2.43:8848', endpoint='', namespace='', watchDelay=30000",
 	}
 	d, _ = json.Marshal(td)
-	//os.RemoveAll(path)
+	os.RemoveAll(path)
 }
 
 func main() {
