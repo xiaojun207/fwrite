@@ -1,4 +1,4 @@
-package fwrite
+package utils
 
 import (
 	"bytes"
@@ -47,8 +47,8 @@ func Task(name string, f func() uint64) {
 	time.Sleep(time.Millisecond * 300)
 }
 
-// exists returns whether the given file or directory exists or not
-func exists(path string) bool {
+// Exists returns whether the given file or directory exists or not
+func Exists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true

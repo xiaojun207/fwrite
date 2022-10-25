@@ -3,6 +3,7 @@ package fwrite
 import (
 	"bufio"
 	"github.com/edsrzf/mmap-go"
+	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
 	"sync"
@@ -21,14 +22,14 @@ type FIdx struct {
 func (f *FIdx) addOffset(l uint64) {
 	w := f.getIdxWriter()
 	f.lastOffset += l
-	w.Write(Uint64ToByte(f.lastOffset))
+	w.Write(utils.Uint64ToByte(f.lastOffset))
 }
 
 func (f *FIdx) getOffset(index int) (offset uint64, length uint64) {
-	nextOffset := ByteToUint64(f.offsetMMap[index*IdxSize : index*IdxSize+IdxSize])
+	nextOffset := utils.ByteToUint64(f.offsetMMap[index*IdxSize : index*IdxSize+IdxSize])
 	//nextOffset := f.offsetList[index]
 	if index > 0 {
-		offset = ByteToUint64(f.offsetMMap[(index-1)*IdxSize : (index-1)*IdxSize+IdxSize])
+		offset = utils.ByteToUint64(f.offsetMMap[(index-1)*IdxSize : (index-1)*IdxSize+IdxSize])
 		//offset = f.offsetList[index-1]
 	} else {
 		offset = 0
@@ -46,7 +47,7 @@ func (f *FIdx) loadIdxMMap() {
 	f.offsetMMap, err = mmap.Map(file, mmap.RDONLY, 0)
 	count := len(f.offsetMMap)
 	if count > 0 {
-		f.lastOffset = ByteToUint64(f.offsetMMap[count-IdxSize : count])
+		f.lastOffset = utils.ByteToUint64(f.offsetMMap[count-IdxSize : count])
 	} else {
 		f.lastOffset = 0
 	}

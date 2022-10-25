@@ -2,8 +2,10 @@ package fwrite
 
 import (
 	lz4 "github.com/pierrec/lz4/v4"
+	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -21,20 +23,20 @@ type LenInt uint16
 
 func toLenArr(ln int) []byte {
 	if LengthSide == 2 {
-		return Uint16ToByte(uint16(ln))
+		return utils.Uint16ToByte(uint16(ln))
 	} else if LengthSide == 4 {
-		return Uint32ToByte(uint32(ln))
+		return utils.Uint32ToByte(uint32(ln))
 	}
-	return Uint64ToByte(uint64(ln))
+	return utils.Uint64ToByte(uint64(ln))
 }
 
 func toLenInt(ln []byte) LenInt {
 	if LengthSide == 2 {
-		return LenInt(ByteToUint16(ln))
+		return LenInt(utils.ByteToUint16(ln))
 	} else if LengthSide == 4 {
-		return LenInt(ByteToUint32(ln))
+		return LenInt(utils.ByteToUint32(ln))
 	}
-	return LenInt(ByteToUint64(ln))
+	return LenInt(utils.ByteToUint64(ln))
 }
 
 var (
@@ -58,14 +60,15 @@ type FWriter struct {
 }
 
 func New(path string) *FWriter {
+	fileName := "00000001.f"
 	os.MkdirAll(path, os.ModePerm)
 	f := &FWriter{
-		path: path + "/00000001.f",
+		path: path + "/" + fileName,
 		FReader: FReader{
-			path: path + "/00000001.f",
+			path: path + "/" + fileName,
 		},
 		FIdx: FIdx{
-			idxPath: path + "/00000001.i",
+			idxPath: path + "/" + strings.TrimRight(fileName, ".f") + ".i",
 		},
 		FMeta: FMeta{
 			metaPath: path + "/meta.m",
@@ -76,7 +79,10 @@ func New(path string) *FWriter {
 }
 
 func (f *FWriter) open() {
-	if exists(f.FMeta.metaPath) {
+	if !utils.Exists(f.path) {
+		return
+	}
+	if utils.Exists(f.FMeta.metaPath) {
 		f.FMeta.loadMeta()
 	} else {
 		f.recreateMeta()
@@ -164,5 +170,5 @@ func (f *FWriter) Flush() {
 }
 
 func (f *FWriter) FileSize() int64 {
-	return Size(f.path)
+	return utils.Size(f.path)
 }

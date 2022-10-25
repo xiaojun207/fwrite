@@ -1,32 +1,36 @@
 package flz4
 
 import (
-	"errors"
 	"github.com/pierrec/lz4/v4"
-	"github.com/xiaojun207/go-base-utils/math"
+	"github.com/xiaojun207/fwrite/utils"
 	"io"
-	"log"
 	"os"
 	"sync"
 )
 
 type FLz4 struct {
-	Reader     *lz4.Reader
+	*lz4.Reader
 	r          *os.File
 	readLock   sync.RWMutex
 	readOffset int64
 	MaxOffset  int64
-	buf        []byte
 }
 
-func NewReader(r *os.File) *FLz4 {
-	return &FLz4{
-		r:      r,
-		Reader: lz4.NewReader(r),
+func NewReader(file *os.File) *FLz4 {
+	f := &FLz4{
+		r:      file,
+		Reader: lz4.NewReader(file),
 	}
+	return f
+}
+
+func (f *FLz4) GetOffset() (int64, error) {
+	return f.r.Seek(0, 1)
 }
 
 func (f *FLz4) Read(buf []byte) (n int, err error) {
+	//f.readLock.Lock()
+	//defer f.readLock.Unlock()
 	return f.Reader.Read(buf)
 }
 
@@ -36,17 +40,24 @@ func (f *FLz4) reset() {
 	f.readOffset = 0
 }
 
-// ReadAt no buf ReadAt
-func (f *FLz4) ReadAt(b []byte, offset int64) (int, error) {
-	return f.readAt(b, offset)
-	//return f.readAtWithBuf(b, offset)
+func (f *FLz4) setReadOffset(offset int64) {
+	f.readOffset = offset
+	if offset <= f.MaxOffset {
+		return
+	}
+	f.MaxOffset = f.readOffset
 }
 
 // ReadAt no buf ReadAt
-func (f *FLz4) readAt(b []byte, offset int64) (int, error) {
+func (f *FLz4) ReadAt(b []byte, offset int64) (int, error) {
 	f.readLock.Lock()
 	defer f.readLock.Unlock()
+	n, err := f.readAt(b, offset)
+	//return f.readAtWithBuf(b, offset)
+	return n, err
+}
 
+func (f *FLz4) seekAt(offset int64) error {
 	if f.readOffset > offset {
 		// 数据已经读取了，需要重新读取
 		f.reset()
@@ -59,61 +70,35 @@ func (f *FLz4) readAt(b []byte, offset int64) (int, error) {
 		n, err := io.CopyN(io.Discard, f.Reader, diffLn)
 
 		if err != nil || n < diffLn {
-			if err.Error() != "EOF" {
-				log.Println("FLz4.readAt.Discard.err:", err, ",readOffset:", f.readOffset, ",offset:", offset, ",n:", n)
-			}
+			utils.PrintlnError(err, "FLz4.seekAt.Discard.err:", err, ",readOffset:", f.readOffset, ",offset:", offset, ",n:", n)
 			// 数据已经到底了
 			f.reset()
-			return 0, err
+			return err
 		}
 		// 数据还没有读取，也没有到底
 		f.readOffset = offset
+		f.setReadOffset(f.readOffset)
 	} else {
 		// f.readOffset == offset
+	}
+	return nil
+}
+
+// ReadAt no buf ReadAt
+func (f *FLz4) readAt(b []byte, offset int64) (int, error) {
+	err := f.seekAt(offset)
+
+	if err != nil {
+		utils.PrintlnError(err, "FLz4.readAt.err:", err, ",readOffset:", f.readOffset, ",offset:", offset)
+		return 0, err
 	}
 
 	nn, err := f.Reader.Read(b)
 	if err != nil {
-		if err.Error() != "EOF" {
-			log.Println("FLz4.readAt.Read.err:", err)
-		}
+		utils.PrintlnError(err, "FLz4.readAt.Read.err:", err)
 		f.reset()
 		return 0, err
 	}
-	f.readOffset = offset + int64(nn)
-	f.MaxOffset = math.Max(f.readOffset, f.MaxOffset)
+	f.setReadOffset(offset + int64(nn))
 	return nn, err
-}
-
-// readAtWithBuf , with buf,
-func (f *FLz4) readAtWithBuf(b []byte, offset int64) (n int, err error) {
-	f.readLock.Lock()
-	defer f.readLock.Unlock()
-
-	ln := int64(len(b))
-	bufLn := int64(len(f.buf))
-
-	if bufLn >= offset+ln {
-		copy(b, f.buf[offset:offset+ln])
-		return int(ln), nil
-	}
-	diffLn := offset + ln - bufLn
-
-	var tmpBuf = make([]byte, diffLn)
-	n, err = f.Reader.Read(tmpBuf)
-	if err != nil {
-		return
-	}
-	f.buf = append(f.buf, tmpBuf[:n]...)
-
-	bufLn = int64(len(f.buf))
-	if bufLn >= offset+ln {
-		copy(b, f.buf[offset:offset+ln])
-		return int(ln), nil
-	} else if bufLn >= offset {
-		copy(b, f.buf[offset:bufLn])
-		return int(bufLn - offset), nil
-	} else {
-		return 0, errors.New("EOF")
-	}
 }

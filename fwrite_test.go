@@ -2,6 +2,7 @@ package fwrite
 
 import (
 	"encoding/json"
+	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
 	"testing"
@@ -30,12 +31,12 @@ func getTestData(i int) []byte {
 func TestTestFWriter(t *testing.T) {
 
 	var fwriter *FWriter
-	Task(t.Name()+"-Open", func() uint64 {
+	utils.Task(t.Name()+"-Open", func() uint64 {
 		fwriter = New(path)
 		return fwriter.Count()
 	})
 
-	Task(t.Name()+"-Write", func() uint64 {
+	utils.Task(t.Name()+"-Write", func() uint64 {
 		for i := 0; i < num; i++ {
 			b := getTestData(i)
 			nn, err := fwriter.Write(b)
@@ -50,7 +51,7 @@ func TestTestFWriter(t *testing.T) {
 		return uint64(num)
 	})
 
-	Task(t.Name()+"-Read", func() uint64 {
+	utils.Task(t.Name()+"-Read", func() uint64 {
 		c := 0
 		num := fwriter.Count()
 		for i := num - 100; i < num; i++ {
@@ -72,9 +73,8 @@ func TestTestFWriter(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	path := "/Users/kdaxrobot/go/src/maize/tmp/maize/index/fluent.info-20221018"
+	path := "tmp/maize/index/fluent.info-20221018"
 	os.RemoveAll(path + "/meta.m")
 	f := New(path)
 	log.Println("count:", f.Count(), f.FirstData(), f.LastData())
-
 }

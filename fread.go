@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/xiaojun207/fwrite/flz4"
+	"github.com/xiaojun207/fwrite/utils"
 	"io"
 	"log"
 	"os"
@@ -15,7 +16,7 @@ type FReader struct {
 }
 
 func (f *FReader) GetReader() (reader IOReader) {
-	if !exists(f.path) {
+	if !utils.Exists(f.path) {
 		// 创建空文件
 		os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	}
@@ -34,13 +35,6 @@ func (f *FReader) readAt(b []byte, offset int64) (int, error) {
 	return f.reader.ReadAt(b, offset)
 }
 
-func (f *FReader) Test() {
-	offset := int64(0)
-	var d = make([]byte, 1006)
-	n, err := f.readAt(d, offset)
-	log.Println("err:", err, ",n:", n, ",d:", d)
-}
-
 func (f *FReader) foreach(offset int64, query func(idx uint64, offset int64, length LenInt, d []byte) bool) uint64 {
 	idx := uint64(0)
 	length := LenInt(0)
@@ -48,7 +42,7 @@ func (f *FReader) foreach(offset int64, query func(idx uint64, offset int64, len
 		var d = make([]byte, LengthSide)
 		_, err := f.readAt(d, offset+HeadSize)
 		if err != nil {
-			PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
+			utils.PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
 			break
 		}
 		length = toLenInt(d)
@@ -56,7 +50,7 @@ func (f *FReader) foreach(offset int64, query func(idx uint64, offset int64, len
 		var b = make([]byte, length)
 		_, err = f.readAt(b, offset+HeadSize+LengthSide)
 		if err != nil {
-			PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
+			utils.PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
 			break
 		}
 		if !query(idx, offset, length, b) {
@@ -66,41 +60,6 @@ func (f *FReader) foreach(offset int64, query func(idx uint64, offset int64, len
 		idx++
 	}
 	return idx
-}
-
-func (f *FReader) foreach2(offset int64, query func(idx uint64, offset int64, length LenInt, d []byte) bool) (idx uint64, err error) {
-	length := LenInt(0)
-	reader := f.GetReader()
-	_, err = io.CopyN(io.Discard, reader, offset)
-	for true {
-		_, err = io.CopyN(io.Discard, reader, HeadSize)
-		if err != nil {
-			if err.Error() != "EOF" {
-				return
-			}
-			break
-		}
-		var ln = make([]byte, LengthSide)
-		_, err = reader.Read(ln)
-		if err != nil {
-			PrintlnError(err, "FReader.foreach2 err:", err, ",idx:", idx, ",offset:", offset)
-			break
-		}
-		length = toLenInt(ln)
-
-		var b = make([]byte, length)
-		_, err = reader.Read(b)
-
-		if err != nil {
-			break
-		}
-		if !query(idx, offset, length, b) {
-			break
-		}
-		offset += HeadSize + LengthSide + int64(length)
-		idx++
-	}
-	return
 }
 
 // Foreach reset reader read all
@@ -136,13 +95,6 @@ func (f *FReader) Foreach(filter func(idx uint64, offset int64, length LenInt, d
 		idx++
 	}
 	return idx, nil
-}
-
-func (f *FReader) ForEach2(filter func(d []byte) bool) (err error) {
-	f.foreach2(0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
-		return filter(d)
-	})
-	return nil
 }
 
 func (f *FReader) ForEach(filter func(d []byte) bool) (err error) {

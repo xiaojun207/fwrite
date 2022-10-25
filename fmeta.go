@@ -2,6 +2,7 @@ package fwrite
 
 import (
 	"encoding/binary"
+	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
 	"sync"
@@ -97,7 +98,7 @@ func (f *FMeta) flushMeta() {
 }
 
 func (f *FMeta) loadMeta() {
-	if exists(f.metaPath) {
+	if utils.Exists(f.metaPath) {
 		b, _ := os.ReadFile(f.metaPath)
 		f.Unmarshal(b)
 	}
