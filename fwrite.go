@@ -112,6 +112,17 @@ func (f *FWriter) GetWriter() IOWriter {
 	return f.writer
 }
 
+func (f *FWriter) Reset() {
+	defer func() {
+		f.writer = nil
+		if err := recover(); err != nil {
+			log.Println("FWriter.Reset, err:", err)
+		}
+	}()
+	f.flush()
+	f.writer = nil
+}
+
 func (f *FWriter) preData(d []byte) []byte {
 	//d = Lz4(d)
 	var res []byte
@@ -125,6 +136,8 @@ func (f *FWriter) preData(d []byte) []byte {
 func (f *FWriter) write(d []byte) (int, error) {
 	nn, err := f.GetWriter().Write(f.preData(d))
 	if err != nil {
+		//log.Panicln("FWriter.write, err:", err)
+		f.Reset()
 		return nn, err
 	}
 

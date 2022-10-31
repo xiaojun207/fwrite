@@ -7,13 +7,13 @@ import (
 	"github.com/xiaojun207/go-base-utils/math"
 	"log"
 	"math/rand"
-	"os"
 	"time"
 )
 
 var path = "tmp/data"
 var d []byte
-var num = 10000
+var num = 1 * 10000 * 10000
+var fwriter *fwrite.FWriter
 
 func init() {
 	td := map[string]string{
@@ -22,18 +22,10 @@ func init() {
 		"log": "2021-12-10 11:43:59,932 ERROR com.alibaba.cloud.nacos.registry.NacosServiceRegistry 75 nacos registry, manager register failed...NacosRegistration{nacosDiscoveryProperties=NacosDiscoveryProperties{serverAddr='192.168.2.43:8848', endpoint='', namespace='', watchDelay=30000",
 	}
 	d, _ = json.Marshal(td)
-	os.RemoveAll(path)
+	//os.RemoveAll(path)
 }
 
-func main() {
-	var fwriter *fwrite.FWriter
-
-	utils.Task("Demo"+"-Open", func() uint64 {
-		fwriter = fwrite.New(path)
-		return fwriter.Count()
-	})
-
-	time.Sleep(time.Second)
+func write() {
 	utils.Task("Demo"+"-Write", func() uint64 {
 		for i := 0; i < num; i++ {
 			b := d
@@ -48,7 +40,9 @@ func main() {
 		fwriter.Flush()
 		return uint64(num)
 	})
+}
 
+func read() {
 	time.Sleep(time.Second)
 	utils.Task("Demo"+"-ForEach", func() uint64 {
 		count := 0
@@ -128,6 +122,20 @@ func main() {
 		}
 		return uint64(c)
 	})
+}
+
+func main() {
+
+	utils.Task("Demo"+"-Open", func() uint64 {
+		fwriter = fwrite.New(path)
+		return fwriter.Count()
+	})
+
+	time.Sleep(time.Second)
+
+	write()
+
+	//read()
 
 	time.Sleep(time.Second)
 	log.Println("fwriter.FMeta:", fwriter.FMeta)
