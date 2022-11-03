@@ -9,23 +9,22 @@ import (
 )
 
 type FLz4 struct {
+	*lz4.Writer
 	*lz4.Reader
 	r          *os.File
 	readLock   sync.RWMutex
 	readOffset int64
 	MaxOffset  int64
+	firstPos   int64
 }
 
-func NewReader(file *os.File) *FLz4 {
+func NewReader(file *os.File, firstPos int64) *FLz4 {
 	f := &FLz4{
-		r:      file,
-		Reader: lz4.NewReader(file),
+		r:        file,
+		firstPos: firstPos,
+		Reader:   lz4.NewReader(file),
 	}
 	return f
-}
-
-func (f *FLz4) GetOffset() (int64, error) {
-	return f.r.Seek(0, 1)
 }
 
 func (f *FLz4) Read(buf []byte) (n int, err error) {
@@ -35,7 +34,7 @@ func (f *FLz4) Read(buf []byte) (n int, err error) {
 }
 
 func (f *FLz4) reset() {
-	f.r.Seek(0, 0)
+	f.r.Seek(f.firstPos, 0)
 	f.Reader.Reset(f.r)
 	f.readOffset = 0
 }

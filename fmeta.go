@@ -1,15 +1,17 @@
 package fwrite
 
 import (
+	"bytes"
 	"encoding/binary"
-	"github.com/xiaojun207/fwrite/utils"
-	"log"
+	"encoding/json"
+	"io"
 	"os"
 	"sync"
 )
 
+var emptyMetaData = make([]byte, FMetaDataSize)
+
 type FMeta struct {
-	metaPath   string
 	bufNum     uint64
 	bufSize    uint64
 	lastLength uint64
@@ -17,20 +19,24 @@ type FMeta struct {
 	bufLast    []byte
 	metaMutex  sync.RWMutex
 
-	num    uint64 `json:"num"`
-	first  []byte `json:"first"`
-	last   []byte `json:"last"`
-	offset uint64 `json:"offset"`
+	num    uint64 `json:"num"`    // 8 byte
+	first  []byte `json:"first"`  // 16 byte
+	last   []byte `json:"last"`   // 16 byte
+	offset uint64 `json:"offset"` // 8 byte
 }
 
 func preMetaData(d []byte) []byte {
-	if len(d) >= FMetaSize {
-		return d[0:FMetaSize]
+	if len(d) >= FMetaDataSize {
+		return d[0:FMetaDataSize]
 	} else {
-		var b = make([]byte, FMetaSize)
+		var b = make([]byte, FMetaDataSize)
 		copy(b[0:len(d)], d)
 		return b
 	}
+}
+
+func (f *FMeta) firstEmpty() bool {
+	return len(f.first) == 0 || bytes.Equal(f.first, emptyMetaData)
 }
 
 func (f *FMeta) fillToMeta(d []byte) {
@@ -38,10 +44,11 @@ func (f *FMeta) fillToMeta(d []byte) {
 	f.lastLength = uint64(HeadSize + LengthSide + len(d))
 	f.bufSize += f.lastLength
 
-	if f.first == nil && f.bufFirst == nil {
-		f.bufFirst = preMetaData(d)
-	}
 	f.bufLast = preMetaData(d)
+
+	if len(f.bufFirst) == 0 {
+		f.bufFirst = f.bufLast
+	}
 }
 
 func (f *FMeta) setFirst(d []byte) {
@@ -65,14 +72,21 @@ func (f *FMeta) Unmarshal(b []byte) {
 	i := 0
 	f.num = binary.BigEndian.Uint64(b[i : i+8])
 	i += 8
-	f.first = b[i : i+FMetaSize]
-	i += FMetaSize
-	f.last = b[i : i+FMetaSize]
-	i += FMetaSize
+	f.first = b[i : i+FMetaDataSize]
+	i += FMetaDataSize
+	f.last = b[i : i+FMetaDataSize]
+	i += FMetaDataSize
 	f.offset = binary.BigEndian.Uint64(b[i : i+IdxSize])
 }
 
-func (f *FMeta) flushMeta() {
+func (f *FMeta) readMeta(r io.Reader) (n int, err error) {
+	buf := make([]byte, FMetaSize)
+	n, err = r.Read(buf)
+	f.Unmarshal(buf)
+	return n, err
+}
+
+func (f *FMeta) flushMeta(w io.Writer) (int, error) {
 	f.metaMutex.Lock()
 	defer f.metaMutex.Unlock()
 
@@ -86,22 +100,32 @@ func (f *FMeta) flushMeta() {
 			f.lastLength = 0
 		}
 
-		if f.first == nil {
+		if f.firstEmpty() {
 			f.first = f.bufFirst
 		}
 		f.last = f.bufLast
 		f.bufLast = nil
 	}
-
+	if len(f.last) == 0 {
+		f.first = make([]byte, FMetaDataSize)
+	}
+	if len(f.last) == 0 || bytes.Equal(f.last, emptyMetaData) {
+		f.last = f.first
+	}
 	d := f.Marshal()
-	os.WriteFile(f.metaPath, d, 0666)
+	return w.Write(d)
 }
 
-func (f *FMeta) loadMeta() {
-	if utils.Exists(f.metaPath) {
-		b, _ := os.ReadFile(f.metaPath)
-		f.Unmarshal(b)
+func (f *FMeta) flushMetaToFile(path string) {
+	fmw, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err == nil {
+		f.flushMeta(fmw)
 	}
+}
+
+func (f *FMeta) loadMetaFromFile(path string) {
+	fmr, _ := os.Open(path)
+	f.readMeta(fmr)
 }
 
 // LastData last write data, only show first 16 byte
@@ -114,36 +138,13 @@ func (f *FMeta) FirstData() []byte {
 	return f.first
 }
 
-func (f *FWriter) recreateMeta() {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
-
-	lastOffset := int64(0)
-
-	firstLength := LenInt(0)
-	lastLength := LenInt(0)
-	num := f.foreach(0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
-		if idx == 0 {
-			firstLength = length
-		}
-		lastLength = length
-		lastOffset = offset
-		return true
-	})
-
-	if num > 0 {
-		var first = make([]byte, firstLength)
-		f.readAt(first, HeadSize+LengthSide)
-		f.FMeta.setFirst(first)
-
-		var last = make([]byte, lastLength)
-		f.readAt(last, lastOffset+HeadSize+LengthSide)
-		f.FMeta.setLast(last)
+func (f *FMeta) String() string {
+	m := map[string]interface{}{
+		"num":    f.num,
+		"first":  f.first,
+		"last":   f.last,
+		"offset": f.offset,
 	}
-
-	f.FMeta.num = num
-	f.FMeta.offset = uint64(lastOffset)
-	f.flushMeta()
-
-	log.Println("recreateMeta.end,meta:", f.FMeta)
+	d, _ := json.Marshal(m)
+	return string(d)
 }

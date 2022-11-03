@@ -3,84 +3,72 @@ package fwrite
 import (
 	"errors"
 	"fmt"
-	"github.com/xiaojun207/fwrite/flz4"
-	"github.com/xiaojun207/fwrite/utils"
-	"io"
-	"log"
-	"os"
 )
 
+type FRowFilter func(idx uint64, offset int64, length LenInt, d []byte) bool
+type FSegFilter func(index, num uint64, first, last []byte, offset uint64) bool
+
 type FReader struct {
-	path   string
-	reader IOReader
+	segments *[]*FSegment
+	readers  []IOReader
 }
 
 func (f *FReader) GetReader() (reader IOReader) {
-	if !utils.Exists(f.path) {
-		// 创建空文件
-		os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	f.readers = []IOReader{}
+	for _, segment := range *f.segments {
+		sr := segment.GetReader()
+		f.readers = append(f.readers, sr)
+		reader = sr
 	}
-	file, err := os.OpenFile(f.path, os.O_RDONLY, 0)
-	if err != nil {
-		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
-	}
-	reader = flz4.NewReader(file)
-	return
+	return nil
 }
 
-func (f *FReader) readAt(b []byte, offset int64) (int, error) {
-	if f.reader == nil {
-		f.reader = f.GetReader()
+// foreachOne reset reader read all
+func (f *FReader) foreachAll(segFilter FSegFilter, filter FRowFilter) (idx uint64, err error) {
+	if len(f.readers) == 0 {
+		f.GetReader()
 	}
-	return f.reader.ReadAt(b, offset)
+
+	for i, reader := range f.readers {
+		seg := (*f.segments)[i]
+
+		if segFilter != nil && !segFilter(seg.index, seg.num, seg.first, seg.last, seg.offset) {
+			continue
+		}
+
+		n, e := f.foreachOne(reader, idx, 0, filter)
+		if e != nil {
+			if e.Error() == "EOF" {
+				//
+			} else {
+				return idx, e
+			}
+		}
+		idx += n
+	}
+	return idx, err
 }
 
-func (f *FReader) foreach(offset int64, query func(idx uint64, offset int64, length LenInt, d []byte) bool) uint64 {
-	idx := uint64(0)
+// foreachOne reset reader read all
+func (f *FReader) foreachOne(reader IOReader, startIdx uint64, offset int64, filter FRowFilter) (idx uint64, err error) {
 	length := LenInt(0)
+	idx = startIdx
 	for true {
-		var d = make([]byte, LengthSide)
-		_, err := f.readAt(d, offset+HeadSize)
-		if err != nil {
-			utils.PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
-			break
-		}
-		length = toLenInt(d)
-
-		var b = make([]byte, length)
-		_, err = f.readAt(b, offset+HeadSize+LengthSide)
-		if err != nil {
-			utils.PrintlnError(err, "FReader.foreach err:", err, ",idx:", idx, ",offset:", offset)
-			break
-		}
-		if !query(idx, offset, length, b) {
-			break
-		}
-		offset += HeadSize + LengthSide + int64(length)
-		idx++
-	}
-	return idx
-}
-
-// Foreach reset reader read all
-func (f *FReader) Foreach(filter func(idx uint64, offset int64, length LenInt, d []byte) bool) (idx uint64, err error) {
-	length := LenInt(0)
-	offset := int64(0)
-	reader := f.GetReader()
-	for true {
-		_, err = io.CopyN(io.Discard, reader, HeadSize)
+		offset += HeadSize
+		var ln = make([]byte, LengthSide)
+		_, err = reader.ReadAt(ln, offset)
 		if err != nil {
 			if err.Error() != "EOF" {
 				return idx, err
 			}
 			break
 		}
-		var ln = make([]byte, LengthSide)
-		_, err = reader.Read(ln)
 		length = toLenInt(ln)
 
+		offset += LengthSide
+
 		var b = make([]byte, length)
-		_, err = reader.Read(b)
+		_, err = reader.ReadAt(b, offset)
 
 		if err != nil {
 			if err.Error() != "EOF" {
@@ -91,25 +79,61 @@ func (f *FReader) Foreach(filter func(idx uint64, offset int64, length LenInt, d
 		if !filter(idx, offset, length, b) {
 			return
 		}
-		offset += HeadSize + LengthSide + int64(length)
+
+		offset += int64(length)
 		idx++
 	}
 	return idx, nil
 }
 
-func (f *FReader) ForEach(filter func(d []byte) bool) (err error) {
-	f.foreach(0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
-		return filter(d)
-	})
-	return nil
+func (f *FReader) readAt(reader IOReader, p []byte, offset int64) (n int, err error) {
+	return reader.ReadAt(p, offset)
+}
+
+// Foreach reset reader read all
+func (f *FReader) Foreach(segFilter FSegFilter, filter FRowFilter) (idx uint64, err error) {
+	return f.foreachAll(segFilter, filter)
 }
 
 // read , depend on idx
 func (f *FWriter) read(index int) ([]byte, error) {
-	offset, length := f.FIdx.getOffset(index)
-	var b = make([]byte, length)
-	_, err := f.FReader.readAt(b, int64(offset+LengthSide+HeadSize))
-	return b, err
+	if len(f.readers) == 0 {
+		f.GetReader()
+	}
+	// 0,10,20     5
+	segIdx := 0
+	for i, segment := range *f.FReader.segments {
+		if segment.index <= uint64(index) {
+			segIdx = i
+		} else {
+			break
+		}
+	}
+	segment := (*f.FReader.segments)[segIdx]
+	reader := f.readers[segIdx]
+
+	useIdx := true
+	//useIdx = false
+
+	if useIdx {
+		offset, length := f.FIdx.getOffset(index)
+		var b = make([]byte, length)
+		_, err := reader.ReadAt(b, int64(offset))
+		return b, err
+	} else {
+		var b []byte
+		_, err := f.FReader.foreachOne(reader, segment.index, 0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
+			if idx < uint64(index) {
+				return true
+			} else if idx == uint64(index) {
+				b = d
+				return false
+			} else {
+				return false
+			}
+		})
+		return b, err
+	}
 }
 
 // index is start at 0,  depend on idx
@@ -123,7 +147,7 @@ func (f *FWriter) Read(index uint64) ([]byte, error) {
 
 // Search ,  depend on idx
 func (f *FWriter) Search(filter func(d []byte) bool) (res [][]byte, err error) {
-	f.foreach(0, func(idx uint64, offset int64, length LenInt, d []byte) bool {
+	f.foreachAll(nil, func(idx uint64, offset int64, length LenInt, d []byte) bool {
 		if filter(d) {
 			res = append(res, d)
 		}

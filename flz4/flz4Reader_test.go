@@ -17,7 +17,7 @@ func TestNew(t *testing.T) {
 	file, err := os.Open(path + "tmp/data/00000001.f")
 
 	log.Println("TestNew.openRead:", err)
-	reader := NewReader(file)
+	reader := NewReader(file, 0)
 
 	offset := int64(0)
 	var d = make([]byte, 6)
@@ -154,4 +154,28 @@ func TestLz4ReadAt(t *testing.T) {
 	sort.Sort[uint64](offsetList)
 	log.Println("offsetList:", offsetList[0:100])
 
+}
+
+func TestReadHead(t *testing.T) {
+	path := os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data/00000000000000000000.f"
+	fr, _ := os.Open(path)
+	header := make([]byte, 48)
+	n, err := fr.Read(header)
+	log.Println("header,n:", n, ",err:", err, "readLz4.header:", header)
+	r := lz4.NewReader(fr)
+
+	buf := make([]byte, 10)
+	n, err = r.Read(buf)
+	log.Println("buf,n:", n, ",err:", err, ",buf:", buf)
+
+}
+
+func TestSeek(t *testing.T) {
+	path := os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data/00000000000000000000.f"
+	fr, _ := os.Open(path)
+	last, _ := fr.Seek(0, 2)
+	log.Println("last:", last)
+	buf := make([]byte, 5)
+	n, err := fr.ReadAt(buf, last+5)
+	log.Println("ReadAt,n:", n, ",err:", err, ",buf:", buf)
 }

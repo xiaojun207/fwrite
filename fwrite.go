@@ -1,10 +1,10 @@
 package fwrite
 
 import (
-	lz4 "github.com/pierrec/lz4/v4"
 	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -44,35 +44,36 @@ var (
 )
 
 const (
-	LengthSide = 4
-	HeadSize   = 1
-	IdxSize    = 8
-	FMetaSize  = 16
+	ext           = ".f"
+	LengthSide    = 4
+	HeadSize      = 1
+	IdxSize       = 8
+	FMetaDataSize = 16
+	FMetaSize     = 8 + FMetaDataSize + FMetaDataSize + IdxSize
+	FilePerms     = 0666
 )
 
 type FWriter struct {
 	FReader
 	FMeta
 	FIdx
-	path   string
-	writer IOWriter
-	mutex  sync.RWMutex
+	metaPath string
+	path     string
+	segLimit uint64 // 定义 segment 记录数
+	segments []*FSegment
+	mutex    sync.RWMutex
 }
 
 func New(path string) *FWriter {
-	fileName := "00000001.f"
-	os.MkdirAll(path, os.ModePerm)
 	f := &FWriter{
-		path: path + "/" + fileName,
-		FReader: FReader{
-			path: path + "/" + fileName,
-		},
+		path:     path,
+		metaPath: path + "/meta.m",
+		FReader:  FReader{},
 		FIdx: FIdx{
-			idxPath: path + "/" + strings.TrimRight(fileName, ".f") + ".i",
+			idxPath: path + "/idx.i",
 		},
-		FMeta: FMeta{
-			metaPath: path + "/meta.m",
-		},
+		segLimit: 50 * 10000,
+		FMeta:    FMeta{},
 	}
 	f.open()
 	return f
@@ -80,47 +81,94 @@ func New(path string) *FWriter {
 
 func (f *FWriter) open() {
 	if !utils.Exists(f.path) {
-		return
+		os.MkdirAll(f.path, os.ModePerm)
 	}
-	if utils.Exists(f.FMeta.metaPath) {
-		f.FMeta.loadMeta()
+
+	f.FReader.segments = &f.segments
+
+	f.loadSegment()
+
+	if utils.Exists(f.metaPath) {
+		f.FMeta.loadMetaFromFile(f.metaPath)
 	} else {
 		f.recreateMeta()
 	}
+}
+
+func (f *FWriter) recreateMeta() {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	num := uint64(0)
+	for i, segment := range f.segments {
+		segment.GetReader()
+		num += segment.FMeta.num
+		if i == 0 {
+			f.FMeta.setFirst(segment.FMeta.first)
+		}
+		if i == len(f.segments)-1 {
+			f.FMeta.setLast(segment.FMeta.last)
+			f.FMeta.offset = segment.FMeta.offset
+		}
+	}
+	f.FMeta.num = num
+	f.FMeta.flushMetaToFile(f.metaPath)
+	log.Println("recreateMeta.end,meta:", f.FMeta)
+}
+
+func (f *FWriter) loadSegment() error {
+	fis, err := os.ReadDir(f.path)
+	if err != nil {
+		log.Println("loadSegment,err:", err)
+		return err
+	}
+	for _, fi := range fis {
+		name := fi.Name()
+		if fi.IsDir() || len(name) < 20 || !strings.HasSuffix(name, ext) {
+			continue
+		}
+
+		index, err := strconv.ParseUint(name[:20], 10, 64)
+		if err != nil {
+			continue
+		}
+		f.segments = append(f.segments, newSegment(index, f.path, f.segLimit))
+	}
+	if len(f.segments) == 0 {
+		// Create a new file
+		f.segments = append(f.segments, newSegment(f.FMeta.num, f.path, f.segLimit))
+	}
+	log.Println("loadSegment, count:", len(f.segments))
+	return nil
 }
 
 func (f *FWriter) Path() string {
 	return f.path
 }
 
-func (f *FWriter) GetWriter() IOWriter {
-	if f.writer == nil {
-		file, err := os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
-		if err != nil {
-			log.Fatalln("FWriter.GetWriter.open, 文件创建失败", err)
-		}
-		fileInfo, _ := os.Stat(f.path)
+func (f *FWriter) lastSegment() *FSegment {
+	lastSeg := f.segments[len(f.segments)-1]
+	if lastSeg.full() {
 
-		w := lz4.NewWriter(file)
-		f.writer = w
-		err = w.Apply(lz4.ChecksumOption(false), lz4.AppendOption(fileInfo.Size() > 4))
+		lastSeg.flush()
+		f.FMeta.flushMetaToFile(f.metaPath)
 
-		if err != nil {
-			log.Println("FWriter.GetWriter.Apply.err:", err)
-		}
+		seg := newSegment(f.FMeta.num, f.path, f.segLimit)
+		f.segments = append(f.segments, seg)
+		return seg
 	}
-	return f.writer
+	return lastSeg
 }
 
 func (f *FWriter) Reset() {
 	defer func() {
-		f.writer = nil
+		f.lastSegment().writer = nil
 		if err := recover(); err != nil {
 			log.Println("FWriter.Reset, err:", err)
 		}
 	}()
 	f.flush()
-	f.writer = nil
+	f.lastSegment().writer = nil
 }
 
 func (f *FWriter) preData(d []byte) []byte {
@@ -134,13 +182,15 @@ func (f *FWriter) preData(d []byte) []byte {
 }
 
 func (f *FWriter) write(d []byte) (int, error) {
-	nn, err := f.GetWriter().Write(f.preData(d))
+	segment := f.lastSegment()
+	nn, err := segment.write(f.preData(d))
 	if err != nil {
+		segment.flush()
+		segment.reset()
+		f.FMeta.flushMetaToFile(f.metaPath)
 		//log.Panicln("FWriter.write, err:", err)
-		f.Reset()
 		return nn, err
 	}
-
 	f.FMeta.fillToMeta(d)
 	return nn, err
 }
@@ -170,9 +220,10 @@ func (f *FWriter) Count() uint64 {
 }
 
 func (f *FWriter) flush() {
-	if f.writer != nil && f.FMeta.bufNum > 0 {
-		f.GetWriter().Flush()
-		f.FMeta.flushMeta()
+	lastSeg := f.lastSegment()
+	if lastSeg.writer != nil && f.FMeta.bufNum > 0 {
+		lastSeg.flush()
+		f.FMeta.flushMetaToFile(f.metaPath)
 	}
 }
 

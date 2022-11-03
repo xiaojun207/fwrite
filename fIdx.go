@@ -15,14 +15,16 @@ type FIdx struct {
 	lastOffset uint64
 	idxNum     uint64
 	offsetMMap mmap.MMap
-	offsetList []uint64
 	idxMutex   sync.RWMutex
 }
 
-func (f *FIdx) addOffset(l uint64) {
+func (f *FIdx) addOffset(off uint64) {
 	w := f.getIdxWriter()
-	f.lastOffset += l
-	w.Write(utils.Uint64ToByte(f.lastOffset))
+	//f.lastOffset += l
+	n, err := w.Write(utils.Uint64ToByte(off))
+	if err != nil {
+		log.Println("addOffset,n:", n, ",err:", err)
+	}
 }
 
 func (f *FIdx) getOffset(index int) (offset uint64, length uint64) {
@@ -52,14 +54,8 @@ func (f *FIdx) loadIdxMMap() {
 		f.lastOffset = 0
 	}
 	f.idxNum = uint64(len(f.offsetMMap) / IdxSize)
-	//log.Println("loadIdxMMap.mmap to list")
-	//var offsetList []uint64
-	//for i := uint64(0); i < f.idxNum; i++ {
-	//	offset := ByteToUint64(f.offsetMMap[i*IdxSize : i*IdxSize+IdxSize])
-	//	offsetList = append(offsetList, offset)
-	//}
-	//f.offsetList = offsetList
-	//log.Println("loadIdxMMap.mmap to list end")
+
+	log.Println("loadIdxMMap, FIdx.idxNum:", f.idxNum)
 }
 
 func (f *FIdx) getIdxNum() uint64 {
@@ -103,9 +99,14 @@ func (f *FWriter) loadIdx() uint64 {
 
 func (f *FWriter) createIdx() {
 	log.Println("createIdx", ", FMeta.num:", f.FMeta.num, ", FIdx.idxNum:", f.FIdx.idxNum)
-	startOffset := f.lastOffset
-	f.FReader.foreach(int64(startOffset), func(idx uint64, offset int64, length LenInt, d []byte) bool {
-		f.FIdx.addOffset(uint64(length + LengthSide + HeadSize))
+	count := uint64(len(f.offsetMMap) / IdxSize)
+	f.FReader.foreachAll(func(index, num uint64, first, last []byte, offset uint64) bool {
+		return true
+	}, func(idx uint64, offset int64, length LenInt, d []byte) bool {
+		//f.FIdx.addOffset(uint64(length + LengthSide + HeadSize))
+		if idx >= count {
+			f.FIdx.addOffset(uint64(offset))
+		}
 		return true
 	})
 	f.FIdx.flushIdx()
