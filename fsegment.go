@@ -57,7 +57,7 @@ func (f *FSegment) getWriter() IOWriter {
 		err = w.Writer.Apply(lz4.ChecksumOption(false), lz4.AppendOption(!empty))
 
 		if err != nil {
-			log.Println("FWriter.GetWriter.Apply.err:", err)
+			log.Println("FSegment.GetWriter.Apply.err:", err)
 		}
 	}
 	return f.writer
@@ -66,12 +66,12 @@ func (f *FSegment) getWriter() IOWriter {
 func (f *FSegment) GetReader() (reader IOReader) {
 	if !utils.Exists(f.path) {
 		// 文件不存在，返回空reader
-		log.Println("GetReader is not exists:", f.path)
+		log.Println("FSegment.GetReader is not exists:", f.path)
 		return bytes.NewReader([]byte{})
 	}
 	file, err := os.Open(f.path)
 	if err != nil {
-		log.Fatalln("FWriter.GetReader, 文件打开失败", err)
+		log.Fatalln("FSegment.GetReader, 文件打开失败", err)
 	}
 	n, err := f.FMeta.readMeta(file)
 	reader = flz4.NewReader(file, int64(n))

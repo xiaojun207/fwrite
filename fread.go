@@ -13,21 +13,20 @@ type FReader struct {
 	readers  []IOReader
 }
 
-func (f *FReader) GetReader() (reader IOReader) {
+func (f *FReader) LoadReader() {
+	if len(f.readers) == len(*f.segments) {
+		return
+	}
 	f.readers = []IOReader{}
 	for _, segment := range *f.segments {
 		sr := segment.GetReader()
 		f.readers = append(f.readers, sr)
-		reader = sr
 	}
-	return nil
 }
 
 // foreachOne reset reader read all
 func (f *FReader) foreachAll(segFilter FSegFilter, filter FRowFilter) (idx uint64, err error) {
-	if len(f.readers) == 0 {
-		f.GetReader()
-	}
+	f.LoadReader()
 
 	for i, reader := range f.readers {
 		seg := (*f.segments)[i]
@@ -97,9 +96,7 @@ func (f *FReader) Foreach(segFilter FSegFilter, filter FRowFilter) (idx uint64, 
 
 // read , depend on idx
 func (f *FWriter) read(index int) ([]byte, error) {
-	if len(f.readers) == 0 {
-		f.GetReader()
-	}
+	f.LoadReader()
 	// 0,10,20     5
 	segIdx := 0
 	for i, segment := range *f.FReader.segments {
