@@ -91,11 +91,11 @@ func (f *FWriter) open() {
 	if utils.Exists(f.metaPath) {
 		f.FMeta.loadMetaFromFile(f.metaPath)
 	} else {
-		f.recreateMeta()
+		f.RecreateMeta()
 	}
 }
 
-func (f *FWriter) recreateMeta() {
+func (f *FWriter) RecreateMeta() {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
