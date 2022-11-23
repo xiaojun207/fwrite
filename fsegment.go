@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/edsrzf/mmap-go"
-	"github.com/pierrec/lz4/v4"
 	"github.com/xiaojun207/fwrite/flz4"
 	"github.com/xiaojun207/fwrite/utils"
 	"log"
@@ -45,23 +44,14 @@ func (f *FSegment) getWriter() IOWriter {
 			log.Fatalln("FSegment.GetWriter.open, 文件创建失败", err)
 		}
 		fileInfo, _ := os.Stat(f.path)
-		empty := fileInfo.Size() == 0
-		if empty {
+		isNew := fileInfo.Size() == 0
+		if isNew {
 			f.FMeta.flushMeta(file)
 		} else {
 			f.FMeta.readMeta(file)
 		}
 		file.Seek(FMetaSize, 0)
-
-		w := flz4.NewWriter(file)
-		f.writer = w
-		err = w.Writer.Apply(lz4.ChecksumOption(false), lz4.AppendOption(!empty))
-		//w.Writer.Apply(lz4.ConcurrencyOption(0))
-		//w.Writer.Apply(lz4.LegacyOption(true))
-
-		if err != nil {
-			log.Println("FSegment.GetWriter.Apply.err:", err)
-		}
+		f.writer = flz4.NewWriter(file, isNew)
 	}
 	return f.writer
 }

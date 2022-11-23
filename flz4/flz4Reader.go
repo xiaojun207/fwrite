@@ -23,6 +23,7 @@ func NewReader(reader io.ReadSeeker, firstPos int64) *FLz4 {
 		firstPos:   firstPos,
 		Reader:     lz4.NewReader(reader),
 	}
+	f.Reader.Apply(lz4.ConcurrencyOption(-1))
 	return f
 }
 

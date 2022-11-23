@@ -57,12 +57,8 @@ func write() {
 }
 
 func read() {
-
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-Size", "M", func() uint64 {
-		size := fwriter.Size()
-		return uint64(size / 1024 / 1024)
-	})
+	utils.Println("size:", uint64(fwriter.Size()/1024/1024), "M")
 
 	time.Sleep(time.Second)
 	utils.Task("Demo"+"-SearchM", "M", func() uint64 {
