@@ -32,11 +32,11 @@ func (f *FIdx) getOffset(index int) (offset uint64, length uint64) {
 	//nextOffset := f.offsetList[index]
 	if index > 0 {
 		offset = utils.ByteToUint64(f.offsetMMap[(index-1)*IdxSize : (index-1)*IdxSize+IdxSize])
-		//offset = f.offsetList[index-1]
+		//size = f.offsetList[index-1]
 	} else {
 		offset = 0
 	}
-	length = nextOffset - offset - (HeadSize + LengthSide)
+	length = nextOffset - offset - (HeadSize + LengthSide + EndSize)
 	return
 }
 

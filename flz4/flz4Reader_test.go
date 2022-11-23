@@ -2,7 +2,9 @@ package flz4
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/pierrec/lz4/v4"
+	"github.com/xiaojun207/fwrite/utils"
 	"github.com/xiaojun207/go-base-utils/sort"
 	"io"
 	"log"
@@ -12,12 +14,13 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	path := ""
 
-	file, err := os.Open(path + "tmp/data/00000001.f")
+	path := os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data/00000000000000000000.f"
+
+	file, err := os.Open(path)
 
 	log.Println("TestNew.openRead:", err)
-	reader := NewReader(file, 0)
+	reader := NewReader(file, 48)
 
 	offset := int64(0)
 	var d = make([]byte, 6)
@@ -178,4 +181,78 @@ func TestSeek(t *testing.T) {
 	buf := make([]byte, 5)
 	n, err := fr.ReadAt(buf, last+5)
 	log.Println("ReadAt,n:", n, ",err:", err, ",buf:", buf)
+}
+
+func TestNewReader(t *testing.T) {
+	path := os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data/00000000000000000000.f"
+	file, err := os.Open(path)
+	log.Println("TestNewReader.openRead:", err)
+
+	file.Seek(48, 0)
+	reader := NewReader(file, 48)
+
+	utils.Task("TestNewReader", "M", func() uint64 {
+		r := Receiver{}
+		r.OnRead = func(b []byte) {
+			//log.Println("b:", b[0:5], len(b))
+		}
+
+		//n, err := reader.WriteTo(readSeeker)
+		n, err := io.Copy(r, reader)
+		if err != nil {
+			log.Println("err:", err)
+		}
+		return uint64(n / 1024 / 1024)
+	})
+}
+
+func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+	// If the reader has a WriteTo method, use it to do the copy.
+	// Avoids an allocation and a copy.
+	if wt, ok := src.(io.WriterTo); ok {
+		return wt.WriteTo(dst)
+	}
+	// Similarly, if the writer has a ReadFrom method, use it to do the copy.
+	if rt, ok := dst.(io.ReaderFrom); ok {
+		return rt.ReadFrom(src)
+	}
+	if buf == nil {
+		size := 32 * 1024
+		if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
+			if l.N < 1 {
+				size = 1
+			} else {
+				size = int(l.N)
+			}
+		}
+		buf = make([]byte, size)
+	}
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw < 0 || nr < nw {
+				nw = 0
+				if ew == nil {
+					ew = errors.New("invalid write result")
+				}
+			}
+			written += int64(nw)
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
 }

@@ -31,12 +31,12 @@ func getTestData(i int) []byte {
 func TestTestFWriter(t *testing.T) {
 
 	var fwriter *FWriter
-	utils.Task(t.Name()+"-Open", func() uint64 {
+	utils.Task(t.Name()+"-Open", "条", func() uint64 {
 		fwriter = New(path)
 		return fwriter.Count()
 	})
 
-	utils.Task(t.Name()+"-Write", func() uint64 {
+	utils.Task(t.Name()+"-Write", "条", func() uint64 {
 		for i := 0; i < num; i++ {
 			b := getTestData(i)
 			nn, err := fwriter.Write(b)
@@ -51,7 +51,7 @@ func TestTestFWriter(t *testing.T) {
 		return uint64(num)
 	})
 
-	utils.Task(t.Name()+"-Read", func() uint64 {
+	utils.Task(t.Name()+"-Read", "条", func() uint64 {
 		c := 0
 		num := fwriter.Count()
 		for i := num - 100; i < num; i++ {

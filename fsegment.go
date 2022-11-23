@@ -3,6 +3,7 @@ package fwrite
 import (
 	"bytes"
 	"fmt"
+	"github.com/edsrzf/mmap-go"
 	"github.com/pierrec/lz4/v4"
 	"github.com/xiaojun207/fwrite/flz4"
 	"github.com/xiaojun207/fwrite/utils"
@@ -55,6 +56,8 @@ func (f *FSegment) getWriter() IOWriter {
 		w := flz4.NewWriter(file)
 		f.writer = w
 		err = w.Writer.Apply(lz4.ChecksumOption(false), lz4.AppendOption(!empty))
+		//w.Writer.Apply(lz4.ConcurrencyOption(0))
+		//w.Writer.Apply(lz4.LegacyOption(true))
 
 		if err != nil {
 			log.Println("FSegment.GetWriter.Apply.err:", err)
@@ -67,6 +70,7 @@ func (f *FSegment) GetReader() (reader IOReader) {
 	if !utils.Exists(f.path) {
 		// 文件不存在，返回空reader
 		log.Println("FSegment.GetReader is not exists:", f.path)
+		//return flz4.NewReader(bytes.NewReader([]byte{}), 0)
 		return bytes.NewReader([]byte{})
 	}
 	file, err := os.Open(f.path)
@@ -75,6 +79,16 @@ func (f *FSegment) GetReader() (reader IOReader) {
 	}
 	n, err := f.FMeta.readMeta(file)
 	reader = flz4.NewReader(file, int64(n))
+	return
+}
+
+func (f *FSegment) MMap() (fileMMap []byte) {
+	file, err := os.Open(f.path)
+	if err != nil {
+		log.Println("FSegment.MMap.文件打开失败", err)
+		return
+	}
+	fileMMap, err = mmap.Map(file, mmap.RDONLY, 0)
 	return
 }
 

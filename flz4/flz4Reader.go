@@ -4,38 +4,39 @@ import (
 	"github.com/pierrec/lz4/v4"
 	"github.com/xiaojun207/fwrite/utils"
 	"io"
-	"os"
 	"sync"
 )
 
 type FLz4 struct {
 	*lz4.Writer
 	*lz4.Reader
-	r          *os.File
+	readSeeker io.ReadSeeker
 	readLock   sync.RWMutex
 	readOffset int64
 	MaxOffset  int64
 	firstPos   int64
 }
 
-func NewReader(file *os.File, firstPos int64) *FLz4 {
+func NewReader(reader io.ReadSeeker, firstPos int64) *FLz4 {
 	f := &FLz4{
-		r:        file,
-		firstPos: firstPos,
-		Reader:   lz4.NewReader(file),
+		readSeeker: reader,
+		firstPos:   firstPos,
+		Reader:     lz4.NewReader(reader),
 	}
 	return f
 }
 
 func (f *FLz4) Read(buf []byte) (n int, err error) {
-	//f.readLock.Lock()
-	//defer f.readLock.Unlock()
-	return f.Reader.Read(buf)
+	n, err = f.Reader.Read(buf)
+	if err != nil {
+		f.readOffset += int64(n)
+	}
+	return
 }
 
-func (f *FLz4) reset() {
-	f.r.Seek(f.firstPos, 0)
-	f.Reader.Reset(f.r)
+func (f *FLz4) Reset() {
+	f.readSeeker.Seek(f.firstPos, 0)
+	f.Reader.Reset(f.readSeeker)
 	f.readOffset = 0
 }
 
@@ -59,7 +60,7 @@ func (f *FLz4) ReadAt(b []byte, offset int64) (int, error) {
 func (f *FLz4) seekAt(offset int64) error {
 	if f.readOffset > offset {
 		// 数据已经读取了，需要重新读取
-		f.reset()
+		f.Reset()
 		if offset > 0 {
 			io.CopyN(io.Discard, f.Reader, offset)
 			f.readOffset = offset
@@ -71,7 +72,7 @@ func (f *FLz4) seekAt(offset int64) error {
 		if err != nil || n < diffLn {
 			utils.PrintlnError(err, "FLz4.seekAt.Discard.err:", err, ",readOffset:", f.readOffset, ",offset:", offset, ",n:", n)
 			// 数据已经到底了
-			f.reset()
+			f.Reset()
 			return err
 		}
 		// 数据还没有读取，也没有到底
@@ -95,9 +96,34 @@ func (f *FLz4) readAt(b []byte, offset int64) (int, error) {
 	nn, err := f.Reader.Read(b)
 	if err != nil {
 		utils.PrintlnError(err, "FLz4.readAt.Read.err:", err)
-		f.reset()
+		f.Reset()
 		return 0, err
 	}
 	f.setReadOffset(offset + int64(nn))
 	return nn, err
+}
+
+func (f *FLz4) ReadSeek(offset, size int64, receiver Receiver) (int64, error) {
+	err := f.seekAt(offset)
+	if err != nil {
+		utils.PrintlnError(err, "FLz4.readAt.err:", err, ",readOffset:", f.readOffset, ",offset:", offset)
+		return 0, err
+	}
+
+	nn, err := io.CopyN(receiver, f.Reader, size)
+	if err != nil {
+		utils.PrintlnError(err, "FLz4.readAt.Read.err:", err)
+		f.Reset()
+		return 0, err
+	}
+	f.setReadOffset(offset + int64(nn))
+	return nn, err
+}
+
+func (f *FLz4) WriteTo(w io.Writer) (n int64, err error) {
+	n, err = f.Reader.WriteTo(w)
+	if err != nil {
+		f.readOffset += int64(n)
+	}
+	return
 }

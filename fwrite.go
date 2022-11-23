@@ -14,12 +14,7 @@ type IOWriter interface {
 	Flush() (err error)
 }
 
-type IOReader interface {
-	Read(p []byte) (n int, err error)
-	ReadAt(p []byte, offset int64) (n int, err error)
-}
-
-type LenInt uint16
+type LenInt uint32
 
 func toLenArr(ln int) []byte {
 	if LengthSide == 2 {
@@ -40,13 +35,15 @@ func toLenInt(ln []byte) LenInt {
 }
 
 var (
-	fHeader = []byte{0}
+	fHeaderFlag = []byte{4}
+	fEndFlag    = []byte{0, 0, 0, 0}
 )
 
 const (
 	ext           = ".f"
 	LengthSide    = 4
 	HeadSize      = 1
+	EndSize       = 0
 	IdxSize       = 8
 	FMetaDataSize = 16
 	FMetaSize     = 8 + FMetaDataSize + FMetaDataSize + IdxSize
@@ -108,7 +105,7 @@ func (f *FWriter) RecreateMeta() {
 		}
 		if i == len(f.segments)-1 {
 			f.FMeta.setLast(segment.FMeta.last)
-			f.FMeta.offset = segment.FMeta.offset
+			f.FMeta.size = segment.FMeta.size
 		}
 	}
 	f.FMeta.num = num
@@ -146,6 +143,10 @@ func (f *FWriter) Path() string {
 	return f.path
 }
 
+func (f *FWriter) SetSegSize(seglimit uint64) {
+	f.segLimit = seglimit
+}
+
 func (f *FWriter) lastSegment() *FSegment {
 	lastSeg := f.segments[len(f.segments)-1]
 	if lastSeg.full() {
@@ -174,10 +175,11 @@ func (f *FWriter) Reset() {
 func (f *FWriter) preData(d []byte) []byte {
 	//d = Lz4(d)
 	var res []byte
-	res = append(res, fHeader...)
+	res = append(res, fHeaderFlag...)
 	arrLen := toLenArr(len(d))
 	res = append(res, arrLen...)
 	res = append(res, d...)
+	//res = append(res, fEndFlag...)
 	return res
 }
 
@@ -235,4 +237,8 @@ func (f *FWriter) Flush() {
 
 func (f *FWriter) FileSize() int64 {
 	return utils.Size(f.path)
+}
+
+func (f *FWriter) Size() uint64 {
+	return f.FMeta.size
 }

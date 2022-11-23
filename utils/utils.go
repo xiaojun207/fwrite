@@ -9,12 +9,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
 const (
 	Layout = "2006-01-02 15:04:05.000000000"
 )
+
+func TimeToStr(mese int64) string {
+	return time.UnixMilli(mese).Format(Layout)
+}
 
 func PrintProgress[T float64 | float32 | int64 | uint64 | int](progress, total T) {
 	Printf("\r进度 %.2f%%", float64(progress*10000/total)/100)
@@ -34,7 +39,7 @@ func PrintlnError(err error, a ...any) {
 	}
 }
 
-func Task(name string, f func() uint64) {
+func Task(name, unit string, f func() uint64) {
 	time.Sleep(time.Millisecond * 300)
 	Printf("..........................................[%s].................................................................\n", name)
 	Printf("%v task[%s]start...\n", time.Now().Format(Layout), name)
@@ -43,7 +48,7 @@ func Task(name string, f func() uint64) {
 	n := f()
 	tl := time.Since(t)
 	time.Sleep(time.Millisecond * 300)
-	Printf("%v task[%s]end，耗时：%v，平均:%.f条/s，总计:%d \n", time.Now().Format(Layout), name, tl, float64(n*1000*1000)/float64(tl.Microseconds()), n)
+	Printf("%v task[%s]end，耗时：%v，平均:%.f%s/s，总计:%d%s \n", time.Now().Format(Layout), name, tl, float64(n*1000*1000*1000)/float64(tl.Nanoseconds()), unit, n, unit)
 	time.Sleep(time.Millisecond * 300)
 }
 
@@ -160,4 +165,38 @@ func UnLz4(d []byte) []byte {
 	}
 	out = out[:n] // uncompressed data
 	return out
+}
+
+func Indexes(s, sep []byte) (res []int) {
+	if len(sep) == 0 {
+		return
+	}
+	idx := 0
+	for {
+		i := bytes.Index(s, sep)
+		if i == -1 {
+			return
+		}
+		res = append(res, idx+i)
+		s = s[i+len(sep):]
+		idx += i + len(sep)
+	}
+	return
+}
+
+func StrIndexes(s, sep string) (res []int) {
+	if len(sep) == 0 {
+		return
+	}
+	idx := 0
+	for {
+		i := strings.Index(s, sep)
+		if i == -1 {
+			return
+		}
+		res = append(res, idx+i)
+		s = s[i+len(sep):]
+		idx += i + len(sep)
+	}
+	return
 }

@@ -8,12 +8,13 @@ import (
 	"github.com/xiaojun207/go-base-utils/math"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 )
 
 var path = "tmp/data"
 var d []byte
-var num = 200 * 10000
+var num = 1000 * 10000
 var fwriter *fwrite.FWriter
 
 func init() {
@@ -23,19 +24,22 @@ func init() {
 		"log": "2021-12-10 11:43:59,932 ERROR com.alibaba.cloud.nacos.registry.NacosServiceRegistry 75 nacos registry, manager register failed...NacosRegistration{nacosDiscoveryProperties=NacosDiscoveryProperties{serverAddr='192.168.2.43:8848', endpoint='', namespace='', watchDelay=30000",
 	}
 
-	d = binary.BigEndian.AppendUint64(d, uint64(time.Now().Unix()))
-	d = binary.BigEndian.AppendUint64(d, uint64(time.Now().Unix()))
+	d = binary.BigEndian.AppendUint64(d, uint64(time.Now().UnixMilli()))
+	d = binary.BigEndian.AppendUint64(d, uint64(time.Now().UnixMilli()+2))
 
 	d2, _ := json.Marshal(td)
 	d = append(d, d2...)
-	//os.RemoveAll(path)
+	// 679,509
+	// 687,317
+	end := []byte{0, 0, 0, 0}
+	d = append(d, end...)
 }
 
 func write() {
 	first_t1 := binary.BigEndian.Uint64(d[0:8])
 	first_t2 := binary.BigEndian.Uint64(d[8:16])
-	log.Println("d:", d[0:16], first_t1, first_t2)
-	utils.Task("Demo"+"-Write", func() uint64 {
+	log.Println("d:", d[0:16], ",first_t1:", first_t1, ",first_t2:", first_t2, ",dlast:", d[len(d)-10:], ",len:", len(d))
+	utils.Task("Demo"+"-Write", "M", func() uint64 {
 		for i := 0; i < num; i++ {
 			b := d
 			nn, err := fwriter.Write(b)
@@ -47,23 +51,35 @@ func write() {
 			}
 		}
 		fwriter.Flush()
-		return uint64(num)
+		//runtime.Goexit()
+		return uint64(num * (len(d) + fwrite.HeadSize + fwrite.LengthSide) / 1024 / 1024)
 	})
 }
 
 func read() {
 
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-Foreach", func() uint64 {
+	utils.Task("Demo"+"-Size", "M", func() uint64 {
+		size := fwriter.Size()
+		return uint64(size / 1024 / 1024)
+	})
+
+	time.Sleep(time.Second)
+	utils.Task("Demo"+"-SearchM", "M", func() uint64 {
+		count := fwriter.FReader.Search([]byte("user-service"))
+		log.Println("SearchM.count:", count)
+		return uint64(fwriter.Size() / 1024 / 1024)
+	})
+
+	time.Sleep(time.Second)
+	utils.Task("Demo"+"-Foreach", "M", func() uint64 {
 		count := 0
+		size := 0
 		segFilter := func(index, num uint64, first, last []byte, offset uint64) bool {
-			first_t2 := binary.BigEndian.Uint64(first[8:16])
-			last_t2 := binary.BigEndian.Uint64(last[8:16])
-			log.Println("segFilter, firstT[", first_t2, "]", ", last[", last_t2, "],first:", first, ",last:", last)
 			return true
 		}
 		rowFilter := func(idx uint64, offset int64, length fwrite.LenInt, d []byte) bool {
-			//log.Println("rowFilter,idx:", idx, ",d:", d[8:16])
+			size += len(d) + 5
 			count++
 			return true
 		}
@@ -71,27 +87,27 @@ func read() {
 		if err != nil {
 			log.Println("Demo-Foreach.err:", err)
 		}
-		return uint64(count)
+		return uint64(size / 1024.0 / 1024.0)
 	})
 
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-LoadIdx", fwriter.LoadIdx)
+	utils.Task("Demo"+"-LoadIdx", "条", fwriter.LoadIdx)
 
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-Search", func() uint64 {
+	utils.Task("Demo"+"-Search", "M", func() uint64 {
 		res, err := fwriter.Search(func(d []byte) bool {
 			return true
 		})
 		log.Println("Demo-Search.err:", err)
-		return uint64(len(res))
+		return uint64(len(res) * len(d) / 1024 / 1024)
 	})
 
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-Read", func() uint64 {
+	utils.Task("Demo"+"-Read", "条", func() uint64 {
 		c := 0
 		n := fwriter.Count()
 		log.Println("Demo-Read.n:", n)
-		start := math.Max(n-10, 0)
+		start := math.Max(n-120, 0)
 		for i := start; i < n; i++ {
 			b, err := fwriter.Read(i)
 			if err != nil {
@@ -107,11 +123,14 @@ func read() {
 	})
 
 	time.Sleep(time.Second)
-	utils.Task("Demo"+"-Rand", func() uint64 {
+	utils.Task("Demo"+"-Rand", "条", func() uint64 {
 		c := 0
 		n := fwriter.Count()
+		if n == 0 {
+			return 0
+		}
 		log.Println("Demo-Rand.n:", n)
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 20; i++ {
 			idx := rand.Int63n(int64(n))
 			tl := time.Now()
 			b, err := fwriter.Read(uint64(idx))
@@ -130,13 +149,11 @@ func read() {
 }
 
 func main() {
-	defer func() {
-		err := recover()
-		if err != nil {
-			log.Println("main.defer,err:", err)
-		}
-	}()
-	utils.Task("Demo"+"-Open", func() uint64 {
+
+	log.Println("d:", d)
+	os.RemoveAll(path)
+
+	utils.Task("Demo"+"-Open", "条", func() uint64 {
 		fwriter = fwrite.New(path)
 		return fwriter.Count()
 	})
@@ -147,9 +164,7 @@ func main() {
 	//
 	read()
 
-	time.Sleep(time.Second)
 	log.Println("fwriter.FMeta:", fwriter.FMeta.String())
 	log.Println("count:", fwriter.Count())
 	log.Printf("TestFWriterWrite Size: %v \n", fwriter.FileSize())
-	time.Sleep(time.Second * 10)
 }

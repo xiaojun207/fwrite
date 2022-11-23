@@ -19,10 +19,10 @@ type FMeta struct {
 	bufLast    []byte
 	metaMutex  sync.RWMutex
 
-	num    uint64 `json:"num"`    // 8 byte
-	first  []byte `json:"first"`  // 16 byte
-	last   []byte `json:"last"`   // 16 byte
-	offset uint64 `json:"offset"` // 8 byte
+	num   uint64 `json:"num"`   // 8 byte
+	first []byte `json:"first"` // 16 byte
+	last  []byte `json:"last"`  // 16 byte
+	size  uint64 `json:"size"`  // 8 byte
 }
 
 func preMetaData(d []byte) []byte {
@@ -41,7 +41,7 @@ func (f *FMeta) firstEmpty() bool {
 
 func (f *FMeta) fillToMeta(d []byte) {
 	f.bufNum++
-	f.lastLength = uint64(HeadSize + LengthSide + len(d))
+	f.lastLength = uint64(HeadSize + LengthSide + len(d) + EndSize)
 	f.bufSize += f.lastLength
 
 	f.bufLast = preMetaData(d)
@@ -64,7 +64,7 @@ func (f *FMeta) Marshal() []byte {
 	res = binary.BigEndian.AppendUint64(res, f.num)
 	res = append(res, f.first...)
 	res = append(res, f.last...)
-	res = binary.BigEndian.AppendUint64(res, f.offset)
+	res = binary.BigEndian.AppendUint64(res, f.size)
 	return res
 }
 
@@ -76,7 +76,7 @@ func (f *FMeta) Unmarshal(b []byte) {
 	i += FMetaDataSize
 	f.last = b[i : i+FMetaDataSize]
 	i += FMetaDataSize
-	f.offset = binary.BigEndian.Uint64(b[i : i+IdxSize])
+	f.size = binary.BigEndian.Uint64(b[i : i+IdxSize])
 }
 
 func (f *FMeta) readMeta(r io.Reader) (n int, err error) {
@@ -95,7 +95,7 @@ func (f *FMeta) flushMeta(w io.Writer) (int, error) {
 		f.bufNum = 0
 
 		if f.bufSize > 0 {
-			f.offset += f.bufSize - f.lastLength
+			f.size += f.bufSize - f.lastLength
 			f.bufSize = 0
 			f.lastLength = 0
 		}
@@ -140,10 +140,10 @@ func (f *FMeta) FirstData() []byte {
 
 func (f *FMeta) String() string {
 	m := map[string]interface{}{
-		"num":    f.num,
-		"first":  f.first,
-		"last":   f.last,
-		"offset": f.offset,
+		"num":   f.num,
+		"first": f.first,
+		"last":  f.last,
+		"size":  f.size,
 	}
 	d, _ := json.Marshal(m)
 	return string(d)

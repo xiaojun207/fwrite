@@ -7,8 +7,8 @@ import (
 
 func NewWriter(file *os.File) *FLz4 {
 	f := &FLz4{
-		r:      file,
-		Writer: lz4.NewWriter(file),
+		readSeeker: file,
+		Writer:     lz4.NewWriter(file),
 	}
 	return f
 }
