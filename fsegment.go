@@ -8,6 +8,7 @@ import (
 	"github.com/xiaojun207/fwrite/utils"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 type FSegment struct {
@@ -38,6 +39,9 @@ func (f *FSegment) full() bool {
 func (f *FSegment) getWriter() IOWriter {
 	if f.writer == nil {
 		// Open the last segment for appending
+		if !utils.Exists(f.path) {
+			os.MkdirAll(filepath.Dir(f.path), os.ModePerm)
+		}
 		file, err := os.OpenFile(f.path, os.O_CREATE|os.O_APPEND|os.O_RDWR, FilePerms)
 		//file, err := os.OpenFile(f.path+f.currentFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {

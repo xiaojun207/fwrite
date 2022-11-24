@@ -109,18 +109,19 @@ func TestNewRead(t *testing.T) {
 }
 
 func TestNewReadTime(t *testing.T) {
-	//path = os.Getenv("USER_HOME") + "/go/src/maize/tmp/maize/index/test-20221121"
-	path = os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data"
+	path = os.Getenv("USER_HOME") + "/go/src/maize/tmp/maize/index/test-20221123"
+	//path = os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data"
 	fw := New(path)
 
 	log.Println("fw.segments:", len(fw.segments))
 	log.Println("fw.first:", binary.BigEndian.Uint64(fw.first[0:8]), ",last:", binary.BigEndian.Uint64(fw.last[0:8]))
 
 	segFilter := func(index, num uint64, first, last []byte, offset uint64) bool {
-		id := binary.BigEndian.Uint64(first[0:8])
-		time_ := binary.BigEndian.Uint64(first[8:16])
-		log.Println("segFilter, index:", index, ",num:", num, ",id:", id, ", time:", time_, ",size:", offset)
-		return true
+		//id := binary.BigEndian.Uint64(first[0:8])
+		//time_ := binary.BigEndian.Uint64(first[8:16])
+		//log.Println("segFilter, index:", index, ",num:", num, ",id:", id, ", time:", time_, ",size:", offset)
+		return index < 58358
+		//return true
 	}
 
 	size := 0
@@ -143,8 +144,36 @@ func TestNewReadTime(t *testing.T) {
 	log.Println("res:", idx, ",err:", err)
 }
 
+func TestNewReadSegment(t *testing.T) {
+	path = os.Getenv("USER_HOME") + "/go/src/maize/tmp/maize/index/test-20221123"
+	//path = os.Getenv("USER_HOME") + "/go/src/fwrite/tmp/data"
+	fw := New(path)
+
+	log.Println("fw.segments:", len(fw.segments))
+	log.Println("fw.first:", binary.BigEndian.Uint64(fw.first[0:8]), ",last:", binary.BigEndian.Uint64(fw.last[0:8]))
+
+	size := 0
+	count := 0
+	rowFilter := func(idx uint64, offset int64, length LenInt, d []byte) bool {
+		if idx > fw.segLimit {
+			id := binary.BigEndian.Uint64(d[0:8])
+			time_ := binary.BigEndian.Uint64(d[8:16])
+			log.Println("d:", id, time_, string(d[16:]))
+			log.Println("idx:", idx, ",offset:", offset, ",length", length, ",d:", len(d))
+		}
+		size += len(d) + 5
+		count++
+		return true
+	}
+	tl := time.Now()
+
+	idx, err := fw.ReadSegment(0, rowFilter)
+	log.Println("耗时:", time.Since(tl), ",数量：", fw.Count(), ",count:", count, ",size:", size, ",getSize:", fw.Size())
+	log.Println("res:", idx, ",err:", err)
+}
+
 func TestSearchRead(t *testing.T) {
-	path = os.Getenv("USER_HOME") + "/go/src/maize/tmp/maize/index/test-20221121"
+	path = os.Getenv("USER_HOME") + "/go/src/maize/tmp/maize/index/test-20221123"
 	fw := New(path)
 
 	utils.Task("TestSearchRead", "条", func() uint64 {

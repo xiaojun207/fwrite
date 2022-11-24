@@ -41,7 +41,7 @@ func (f *FMeta) firstEmpty() bool {
 
 func (f *FMeta) fillToMeta(d []byte) {
 	f.bufNum++
-	f.lastLength = uint64(HeadSize + LengthSide + len(d) + EndSize)
+	f.lastLength = uint64(HeadSize + LengthSide + len(d))
 	f.bufSize += f.lastLength
 
 	f.bufLast = preMetaData(d)

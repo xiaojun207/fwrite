@@ -35,15 +35,13 @@ func toLenInt(ln []byte) LenInt {
 }
 
 var (
-	fHeaderFlag = []byte{4}
-	fEndFlag    = []byte{0, 0, 0, 0}
+	fHeaderFlag = []byte{4, 0}
 )
 
 const (
 	ext           = ".f"
 	LengthSide    = 4
-	HeadSize      = 1
-	EndSize       = 0
+	HeadSize      = 2
 	IdxSize       = 8
 	FMetaDataSize = 16
 	FMetaSize     = 8 + FMetaDataSize + FMetaDataSize + IdxSize
@@ -179,7 +177,6 @@ func (f *FWriter) preData(d []byte) []byte {
 	arrLen := toLenArr(len(d))
 	res = append(res, arrLen...)
 	res = append(res, d...)
-	//res = append(res, fEndFlag...)
 	return res
 }
 

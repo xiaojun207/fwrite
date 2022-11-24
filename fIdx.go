@@ -36,7 +36,7 @@ func (f *FIdx) getOffset(index int) (offset uint64, length uint64) {
 	} else {
 		offset = 0
 	}
-	length = nextOffset - offset - (HeadSize + LengthSide + EndSize)
+	length = nextOffset - offset - (HeadSize + LengthSide)
 	return
 }
 

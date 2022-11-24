@@ -79,6 +79,30 @@ func (f *FReader) foreachAll(segFilter FSegFilter, filter FRowFilter) (idx uint6
 	return idx, err
 }
 
+func (f *FReader) ReadSegment(segIdx int, filter FRowFilter) (idx uint64, err error) {
+	readers := f.loadReader()
+
+	for i, reader := range readers {
+		seg := (*f.segments)[i]
+
+		if i == segIdx {
+			log.Println("seg,num:", seg.num, ",size:", seg.size, ",last:", seg.FMeta.last)
+			n, e := foreachSingle(reader, idx, 0, filter)
+			//n, e := f.foreachOne(reader, idx, 0, filter)
+			if e != nil {
+				if e.Error() == "EOF" {
+					//
+				} else {
+					log.Println("foreachFull,err:", e, ", i:", i, ",index:", seg.index, ",n:", n)
+					//return idx, e
+				}
+			}
+			idx += n
+		}
+	}
+	return idx, err
+}
+
 // foreachSingle reset reader read all
 func foreachSingle(reader IOReader, startIdx uint64, offset int64, filter FRowFilter) (idx uint64, err error) {
 	if rs, ok := reader.(flz4.Reset); ok {
@@ -88,39 +112,44 @@ func foreachSingle(reader IOReader, startIdx uint64, offset int64, filter FRowFi
 	length := LenInt(0)
 	idx = startIdx
 	over := false
+	useSkip := len(fHeaderFlag) > 1
 	var recv = flz4.Receiver{}
 	// 每个块数据完整
 	var leftBuf bytes.Buffer
 	var i = 0
-	recv.OnRead = func(d []byte) {
+	var count = 0
+
+	recv.OnRead = func(b []byte) {
+		i++
 		if over {
 			return
 		}
+		var d []byte
 		if leftBuf.Len() > 0 {
-			d = append(leftBuf.Bytes(), d...)
+			d = append(leftBuf.Bytes(), b...)
 			leftBuf.Reset()
+		} else {
+			d = b
 		}
-		i++
 		cur := 0
 		dLen := len(d)
 		for dLen > cur {
 			off := 0
 			if !bytes.HasPrefix(d[cur:], fHeaderFlag) {
-				log.Println("i:", i, ",foreachSingle,head1,startIdx:", startIdx, ",header,.dLen:", dLen, ",cur:", cur, ",length:", length, ",d[cur:]", d[cur:cur+20])
-
-				if EndSize > 0 {
-					// 发现错误数据，跳过
-					skipIdx := bytes.Index(d[cur:], fEndFlag)
+				// 发现错误数据，跳过
+				if useSkip {
+					skipIdx := bytes.Index(d[cur:], fHeaderFlag)
 					if skipIdx > -1 {
-						cur += skipIdx + len(fEndFlag)
+						cur += skipIdx
 						continue
 					}
 				}
-				break
+				return
 			}
+			count++
 			off += HeadSize
 			if dLen < cur+off+LengthSide {
-				log.Println("i:", i, ",foreachSingle,head2,startIdx:", startIdx, ",header,.dLen:", dLen, ",cur:", cur, ",length:", length, ",d[cur:]")
+				log.Println("foreachSingle,i:", i, ",head2,dLen:", dLen, ",cur:", cur, ",length:", length, ",d[cur:]")
 				break
 			}
 			length = toLenInt(d[cur+off : cur+off+LengthSide])
@@ -134,7 +163,6 @@ func foreachSingle(reader IOReader, startIdx uint64, offset int64, filter FRowFi
 				return
 			}
 			off += int(length)
-			off += EndSize
 			cur += off
 			offset += int64(off)
 			idx++
@@ -185,7 +213,6 @@ func (f *FReader) foreachOne(reader IOReader, startIdx uint64, offset int64, fil
 		}
 
 		offset += int64(length)
-		offset += EndSize
 		idx++
 	}
 	return idx, nil
