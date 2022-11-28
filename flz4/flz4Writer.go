@@ -11,7 +11,8 @@ func NewWriter(file *os.File, isNew bool) *FLz4 {
 		readSeeker: file,
 		Writer:     lz4.NewWriter(file),
 	}
-	err := f.Writer.Apply(lz4.ChecksumOption(false), lz4.ConcurrencyOption(-1), lz4.AppendOption(!isNew))
+	err := f.Writer.Apply(lz4.ChecksumOption(false), lz4.AppendOption(!isNew))
+	//f.Writer.Apply(lz4.ConcurrencyOption(-1))
 	//f.Writer.Apply(lz4.LegacyOption(true))
 
 	if err != nil {
